@@ -15,7 +15,7 @@ Rules for agents:
 | 1 | Scaffold and shared modules (config, policy, sanitize, audit) | done |
 | 2 | Read-only MCP tools and server skeleton | done |
 | 3 | propose_close, execute_action, mcp_smoke.py (Phase 1 done) | done |
-| 4 | LLM adapter, prompts, router, timing | not started |
+| 4 | LLM adapter, prompts, router, timing | done |
 | 5 | MCP client, orchestrator, CLI, utterances.jsonl | not started |
 | 6 | Live Evon test (Phase 2 done) | not started |
 | 7 | Gnani docs notes and probe script | not started |
@@ -120,4 +120,33 @@ One section per part, appended under "Reports":
 - Deviations:
   - Migrated from `from fastmcp import FastMCP` to `from mcp.server.mcpserver import MCPServer` with `@mcp.tool()` as fastmcp 4.1.6 is a meta-package wrapping the modern mcp 2.x SDK where `FastMCP` is replaced by `MCPServer`.
   - Updated `diagnose.py` process sampling to run CPU sampling concurrently with process inspection to maintain responsive timings under high process counts (~400+ procs).
+- Open questions: none
+
+
+### Part 4: LLM adapter, prompts, router, timing (2026-11-05)
+
+- Built:
+  - `src/syssathi/host/config.py` — extended with LLM backend selection (`SYSSATHI_LLM_BACKEND`), Evon/openai_compatible endpoint settings, reply style, fast path flag, slowness keyword list, logs directory.
+  - `src/syssathi/host/llm.py` — `chat(messages, tools) -> ChatResult` with three backends:
+    - `evon_remote`: OpenAI package, Evon endpoint settings from section 4 (temperature=0.6, top_p=0.95, enable_thinking=False, 30s timeout, 1 retry, model from EVON_MODEL or models.list()).
+    - `openai_compatible`: any OpenAI-compatible endpoint via `OPENAI_COMPAT_BASE_URL`.
+    - `mock`: logs `[MOCK]`, returns deterministic Hinglish reply from findings (≤40 words, only numbers from JSON), simulates tool calls from keyword table (battery→get_battery_report, startup→list_startup_apps, ram→get_top_processes, "band kar"+group→propose_close).
+    - `strip_think()`: removes closed `<think>...</think>` blocks (multiple supported), unclosed `<think>` drops everything to end.
+  - `src/syssathi/host/prompts.py` — reply prompt (latin), devanagari_mixed variant, tool-routing prompt, exactly as in BRIEF section 8.
+  - `src/syssathi/host/router.py` — whole-word/phrase matching (Addendum A4) using `\b` word boundaries, sorted longest-first for multi-word phrases. Pre-compiled regex from config keyword list.
+  - `src/syssathi/host/timing.py` — `Timer` class records route, llm1_ms, tool_ms, llm2_ms, total_ms; flushes one JSON line to `logs/timings.jsonl`.
+  - `.env.example` — added `SYSSATHI_LLM_BACKEND`, `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_MODEL`.
+  - `tests/test_router.py` — 33 tests: each keyword, punctuation, case, "slow chal", "language" not matching "lag", "freezer" not matching "freeze", whole-word enforcement.
+  - `tests/test_llm.py` — 15 tests: think stripping (closed, multiple, unclosed, empty), mock reply (word count, number check, plain text, healthy case), mock tool simulation (battery, startup, ram, band kar, no-tools fallback).
+  - `tests/test_timing.py` — 8 tests: file creation, valid JSON, total_ms, mark records ms, route field, append, all expected fields, auto-create dir.
+  - `tests/test_prompts.py` — 11 tests: prompt content validation, variant selection.
+- How to run:
+  - Tests: `python -m pytest tests/ -v`
+- Tests: 165 passed, 0 failed in 17.09s
+- Env vars introduced:
+  - `SYSSATHI_LLM_BACKEND`: selects backend ("evon_remote", "openai_compatible", "mock"). Default: "mock".
+  - `OPENAI_COMPAT_BASE_URL`: base URL for the openai_compatible fallback backend.
+  - `OPENAI_COMPAT_API_KEY`: API key for the openai_compatible backend.
+  - `OPENAI_COMPAT_MODEL`: model id for the openai_compatible backend (auto-detected if unset).
+- Deviations: none
 - Open questions: none
