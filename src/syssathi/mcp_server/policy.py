@@ -30,6 +30,7 @@ def get_thresholds() -> dict[str, float | int]:
 # --- Protected process names ---
 
 PROTECTED_NAMES: frozenset[str] = frozenset({
+    # Core Windows OS and session infrastructure
     "system",
     "system idle process",
     "registry",
@@ -43,16 +44,90 @@ PROTECTED_NAMES: frozenset[str] = frozenset({
     "explorer",
     "dwm",
     "fontdrvhost",
+    "sihost",
+    "ctfmon",
+    "audiodg",
+    "spoolsv",
+    # Windows Defender and Security
     "msmpeng",
     "securityhealthservice",
-    # Development / shell safeguards
+    "securityhealthhost",
+    "smartscreen",
+    # Windows Shell & Task Management
+    "taskmgr",
+    "searchhost",
+    "startmenuexperiencehost",
+    "shellexperiencehost",
+    "lockapp",
+    "logonui",
+    "textinputhost",
+    "applicationframehost",
+    # Terminals, Consoles & Shells
+    "conhost",
+    "cmd",
+    "powershell",
+    "pwsh",
+    "windowsterminal",
+    "wt",
+    "bash",
+    "zsh",
+    "sh",
+    "fish",
+    "dash",
+    "tmux",
+    "screen",
+    # Linux / WSL Core & Init
+    "init",
+    "systemd",
+    "systemd-journald",
+    "systemd-udevd",
+    "systemd-logind",
+    "systemd-resolved",
+    "dbus-daemon",
+    "dbus-broker",
+    "cron",
+    "crond",
+    "sshd",
+    "rsyslogd",
+    "udevd",
+    "wsl",
+    "wslhost",
+    "wslservice",
+    "wslrelay",
+    "gvfsd",
+    # Linux Desktop Display & Audio
+    "xorg",
+    "wayland",
+    "weston",
+    "gnome-shell",
+    "kwin",
+    "mutter",
+    "xfwm4",
+    "pulseaudio",
+    "pipewire",
+    "wireplumber",
+    # Developer Tooling, Editors & Environments
     "agy",
     "antigravity",
     "code",
-    "bash",
-    "wsl",
-    "wslhost",
-    "init",
+    "cursor",
+    "windsurf",
+    "zed",
+    "sublime_text",
+    "subl",
+    "idea64",
+    "pycharm64",
+    "clion64",
+    "webstorm64",
+    "devenv",
+    "vim",
+    "nvim",
+    "nano",
+    "emacs",
+    "docker",
+    "dockerd",
+    "containerd",
+    "podman",
 })
 
 
@@ -64,15 +139,26 @@ def normalize_process_name(name: str) -> str:
     return n
 
 
+def get_extra_protected() -> set[str]:
+    """Return extra protected names configured via SYSSATHI_EXTRA_PROTECTED env var."""
+    raw = os.environ.get("SYSSATHI_EXTRA_PROTECTED", "")
+    if not raw:
+        return set()
+    return {normalize_process_name(x) for x in raw.split(",") if x.strip()}
+
+
 def is_protected(name: str) -> bool:
     """Check if a process name is protected.
 
-    Ignores case and .exe suffix.  Any name containing 'python' is protected.
+    Ignores case and .exe suffix. Any name containing 'python' is protected.
+    Also honors user-provided SYSSATHI_EXTRA_PROTECTED list.
     """
     normalized = normalize_process_name(name)
     if normalized in PROTECTED_NAMES:
         return True
     if "python" in normalized:
+        return True
+    if normalized in get_extra_protected():
         return True
     return False
 

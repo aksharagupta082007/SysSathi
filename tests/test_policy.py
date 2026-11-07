@@ -60,9 +60,18 @@ class TestIsProtected:
             "System", "System Idle Process", "Registry", "smss", "csrss",
             "wininit", "winlogon", "services", "lsass", "svchost",
             "explorer", "dwm", "fontdrvhost", "MsMpEng", "SecurityHealthService",
+            "taskmgr", "cmd", "powershell", "bash", "code", "cursor", "docker",
+            "agy", "antigravity", "wsl",
         ]
         for name in protected:
             assert is_protected(name) is True, f"{name} should be protected"
+
+    def test_extra_protected_env_var(self):
+        assert is_protected("my_custom_tool") is False
+        with mock.patch.dict(os.environ, {"SYSSATHI_EXTRA_PROTECTED": "my_custom_tool.exe, another_app"}):
+            assert is_protected("my_custom_tool") is True
+            assert is_protected("MY_CUSTOM_TOOL.EXE") is True
+            assert is_protected("another_app") is True
 
 
 class TestThresholds:
