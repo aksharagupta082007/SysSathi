@@ -40,12 +40,15 @@ def dummy_ping():
 
     The group name is 'ping' (normalize_process_name('PING.EXE') == 'ping').
     """
-    proc = subprocess.Popen(
-        ["ping", "-t", "127.0.0.1"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-    )
+    kwargs = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+    cmd = ["ping", "-t", "127.0.0.1"] if os.name == "nt" else ["ping", "127.0.0.1"]
+    proc = subprocess.Popen(cmd, **kwargs)
     # Verify it's running and the group is "ping"
     ps = psutil.Process(proc.pid)
     assert normalize_process_name(ps.name()) == "ping", (

@@ -42,12 +42,24 @@ class Timer:
         """Milliseconds since timer creation."""
         return (time.perf_counter() - self._start) * 1000
 
+    @property
+    def route(self) -> str | None:
+        return self._fields.get("route")
+
+    @property
+    def total_ms(self) -> float:
+        return self._fields.get("total_ms", round(self.elapsed_ms(), 1))
+
     def flush(self) -> dict[str, Any]:
         """Record total_ms and append one JSON line to timings.jsonl.
 
         Returns the full timing record.
         """
         self._fields["total_ms"] = round(self.elapsed_ms(), 1)
+        # Ensure Phase 3 keys exist or are preserved if set
+        for k in ["stt_ms", "first_sentence_ms", "tts_first_byte_ms"]:
+            if k in self._fields:
+                self._fields[k] = round(self._fields[k], 1)
         logs_dir = self._logs_dir or _default_logs_dir()
         logs_dir.mkdir(parents=True, exist_ok=True)
         path = logs_dir / "timings.jsonl"

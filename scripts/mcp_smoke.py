@@ -59,8 +59,11 @@ async def main() -> None:
             # Validate schema
             import jsonschema
             from syssathi.mcp_server.diagnose import FINDINGS_SCHEMA
-            jsonschema.validate(data, FINDINGS_SCHEMA)
-            print("    Schema: VALID")
+            if data.get("supported") is False:
+                print("    Schema: SKIPPED (non-Windows system returned {'supported': False})")
+            else:
+                jsonschema.validate(data, FINDINGS_SCHEMA)
+                print("    Schema: VALID")
             print()
 
             # 2. get_top_processes

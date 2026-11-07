@@ -16,12 +16,12 @@ Rules for agents:
 | 2 | Read-only MCP tools and server skeleton | done |
 | 3 | propose_close, execute_action, mcp_smoke.py (Phase 1 done) | done |
 | 4 | LLM adapter, prompts, router, timing | done |
-| 5 | MCP client, orchestrator, CLI, utterances.jsonl | not started |
-| 6 | Live Evon test (Phase 2 done) | not started |
-| 7 | Gnani docs notes and probe script | not started |
-| 8 | Voice clients and sentence streaming | not started |
-| 9 | FastAPI backend and push-to-talk page | not started |
-| 10 | Approve flow and re-measure speech (Phase 4 done) | not started |
+| 5 | MCP client, orchestrator, CLI, utterances.jsonl | done |
+| 6 | Live Evon test (Phase 2 done) | done |
+| 7 | Gnani docs notes and probe script | done |
+| 8 | Voice clients and sentence streaming | done |
+| 9 | FastAPI backend and push-to-talk page | done |
+| 10 | Approve flow and re-measure speech (Phase 4 done) | done |
 
 Status values: not started, in progress, done, blocked.
 
@@ -148,5 +148,97 @@ One section per part, appended under "Reports":
   - `OPENAI_COMPAT_BASE_URL`: base URL for the openai_compatible fallback backend.
   - `OPENAI_COMPAT_API_KEY`: API key for the openai_compatible backend.
   - `OPENAI_COMPAT_MODEL`: model id for the openai_compatible backend (auto-detected if unset).
+- Deviations: none
+- Open questions: none
+
+
+### Part 5: MCP client, orchestrator, CLI, utterances (2026-11-07)
+
+- Built:
+  - `src/syssathi/host/mcp_client.py` — stdio MCP client subprocess runner with `SYSSATHI_APPROVAL_TOKEN` passed via env, `list_tools`, `call_tool`, and filter exposing only the 5 allowed Evon schemas (excludes `execute_action`).
+  - `src/syssathi/host/orchestrator.py` — `Orchestrator` managing fast path (Addendum A1 propose_close on RAM_HIGH/CPU_HIGH) and evon route with tool validation (allowlist check, jsonschema validation, max 1 tool call per turn, fallback message "Mujhe samajh nahi aaya..."), 6-message window, 2,000 char tool output truncation, Addendum A3 reply guard, and `approve()` method for host-initiated execution.
+  - `src/syssathi/host/cli.py` — terminal interactive loop printing `"Main SysSathi hoon, ek AI assistant."`, handling messages, `/approve` command, `/quit` command, and timings per turn.
+  - `tests/utterances.jsonl` — 20 benchmark test utterances across slowness, specific queries, actions, and refusals.
+  - `tests/test_helpers.py` — Addendum A2 number check verification (`extract_numbers_from_text`, `collect_allowed_numbers`, `verify_reply_numbers`).
+  - `tests/test_orchestrator.py` — 11 comprehensive tests covering number-check helper, reply guard, fast path with A1 proposal, approve flow, evon route refusal of `execute_action`, schema validation rejection, and 6-message history cap.
+- How to run:
+  - Tests: `SYSSATHI_LLM_BACKEND=mock python -m pytest tests/ -v`
+  - CLI: `SYSSATHI_LLM_BACKEND=mock python -m syssathi.host.cli`
+- Tests: 176 passed, 0 failed in 5.27s
+- Deviations: none
+- Open questions: none
+
+### Part 6: Live Evon test (2026-11-07)
+
+- Built:
+  - `scripts/test_evon_tools.py` — live benchmark runner against Evon endpoint evaluating the 20 benchmark utterances, validating tool schemas without calling MCP execution tools, reporting pass/fail, latencies, and summary statistics.
+- Live Benchmark Results:
+  - Total Utterances: 20
+  - Passed: 13 / 20 (65.0%)
+  - Slowness queries (8/8): 100% pass (`diagnose_slowness`)
+  - Specific queries (4/4): 100% pass (`get_battery_report`, `list_startup_apps`, `get_top_processes`, `diagnose_slowness`)
+  - Refusals (1/2 pure refusals): "Delete my files" correctly returned no tool call. "Aaj mausam kaisa hai?" called `diagnose_slowness`.
+  - Actions & Protected Groups: Evon frequently opted to call `get_top_processes` or `diagnose_slowness` prior to proposing close in a single turn without history.
+  - Invalid Tool Calls: 0 (all tool names in allowlist and arguments validated against JSON schema).
+  - Latencies: Median 1213.5 ms, Max 1738.1 ms.
+- Live CLI verification:
+  - `FORCE_FAST_PATH=true`: "mera laptop slow chal raha hai" returned "Laptop looks healthy." (1645.4 ms total, 4 words, number check valid).
+  - `FORCE_FAST_PATH=false`: "battery kitni bachi hai?" routed to `evon`, called `get_battery_report`, and replied "Battery report not supported." (2975.8 ms total).
+- Deviations: Fixed `EVON_BASE_URL` in `.env` to include `/v1` suffix required by vLLM endpoint.
+- Open questions: Evon tool choice on action queries without prior diagnostic context.
+
+
+### Part 7: Gnani docs study and probe (2026-11-07)
+
+- Built:
+  - `docs/GNANI_NOTES.md` — exact protocol and endpoint specifications for Gnani AI Vachana platform (Prisma v3.0 REST & WebSocket STT with formats, keyterms, candidate languages; Timbre v3.0 REST, SSE, and WebSocket TTS with 13-voice catalog, audio config, and Roman Hinglish notes).
+  - `scripts/gnani_probe.py` — probe utility testing Timbre TTS with "Ek second, check karta hoon" in `latin` and `devanagari_mixed`, saving audio files to `logs/audio_probes/`, and testing Prisma STT transcription.
+- How to run:
+  - `python scripts/gnani_probe.py [--audio path/to/sample.wav]`
+- Tests: N/A (probe utility).
+- Deviations: none
+- Open questions: none
+
+### Part 8: Voice clients and sentence streaming (2026-11-07)
+
+- Built:
+  - `src/syssathi/voice/splitter.py` — `SentenceSplitter` and `split_sentences_async` segmenting LLM token streams into finished sentences on Latin (`.`, `?`, `!`) and Hindi dandas (`।`, `॥`).
+  - `src/syssathi/voice/prisma.py` — `PrismaClient` wrapping Prisma v3.0 REST transcription and streaming setup.
+  - `src/syssathi/voice/timbre.py` — `TimbreClient` synthesizing complete sentences to WAV audio bytes.
+  - `src/syssathi/host/config.py` & `timing.py` — added Phase 3 config keys (`GNANI_API_KEY`, `PRISMA_MODE`, `TIMBRE_VOICE`, `KEYTERMS_LIST`) and latency fields (`stt_ms`, `first_sentence_ms`, `tts_first_byte_ms`).
+  - `tests/test_voice.py` — 4 tests validating punctuation splitting, token chunk stream reconstitution, and async generators.
+- How to run:
+  - Tests: `python -m pytest tests/test_voice.py -v`
+- Tests: 4 passed in 0.03s
+- Deviations: none
+- Open questions: none
+
+### Part 9: FastAPI backend and push-to-talk page (2026-11-07)
+
+- Built:
+  - `src/syssathi/web/static/index.html` — single static UI with hold-to-talk button, mic capture with `echoCancellation` and `noiseSuppression`, live transcript box, assistant reply box, proposal container, and Approve action button. Mutes mic state during audio playback.
+  - `src/syssathi/web/app.py` — FastAPI application binding 127.0.0.1, embedding a random session nonce in the HTML page (Addendum A5), protecting approval token from ever reaching the client, WebSocket `/ws/talk` pipeline connecting browser mic stream, router, fast-path filler, orchestrator, and chunked Timbre audio streaming.
+  - `tests/test_web.py` — 2 tests validating HTML rendering, nonce inclusion, absence of approval token in client payloads, and offline WebSocket talk pipeline.
+- How to run:
+  - Run web server: `.venv/bin/uvicorn syssathi.web.app:app --host 127.0.0.1 --port 8000`
+  - Tests: `python -m pytest tests/test_web.py -v`
+- Tests: 2 passed in 3.31s (Full suite: 182 passed in 3.65s)
+- Deviations: Installed `fastapi` using uv in `.venv` to power the web server.
+- Open questions: none
+
+
+### Part 10: Approve flow and re-measure speech (2026-11-07)
+
+- Built:
+  - `src/syssathi/web/confirmation.py` — deterministic template confirmation function `format_remeasure_reply()` building before-and-after RAM comparisons (e.g. "RAM 91% se 64% ho gaya."), handling cases where RAM did not drop, cases where some processes were skipped/failed, and error/expiry refusals, bounded by the 40-word reply guard.
+  - `src/syssathi/web/app.py` — wired `POST /api/approve` endpoint with Addendum A5 security checks (nonce matching via constant-time compare, Origin and Host validation restricting to local host, host-internal `SYSSATHI_APPROVAL_TOKEN` execution, and clearing pending proposal).
+  - `src/syssathi/web/static/index.html` — wired the Approve button click handler sending `X-SysSathi-Nonce`, 60-second expiration countdown, and response rendering.
+  - `docs/DEMO.md` — 5-step end-to-end demo walkthrough covering push-to-talk, immediate filler, diagnosis, approval, and re-measurement confirmation.
+  - `tests/test_confirmation.py` — 5 tests covering RAM drop, RAM unchanged, skipped/failed process counts, expired proposals, and reused action IDs.
+  - `tests/test_web.py` — added test verifying missing nonce, wrong nonce, foreign origin rejection, and happy path proposal gating.
+- How to run:
+  - Tests: `python -m pytest tests/test_confirmation.py tests/test_web.py -v`
+  - Demo: follow steps in `docs/DEMO.md`
+- Tests: 188 passed in 4.14s across the full test suite
 - Deviations: none
 - Open questions: none

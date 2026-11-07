@@ -1,0 +1,21 @@
+{"text": "Mera laptop slow chal raha hai", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "Laptop bohot hang ho raha hai", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "System me lag aa raha hai", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "Bahut laggy chal raha hai computer", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "PC itna dheema kyu chal raha hai?", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "Laptop baar baar atak raha hai", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "Screen freeze ho gayi hai", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "Why is my laptop running slow?", "category": "slowness", "expected": ["diagnose_slowness"]}
+{"text": "Battery kitni bachi hai?", "category": "specific", "expected": ["get_battery_report"]}
+{"text": "Startup pe kaun se apps chalte hain?", "category": "specific", "expected": ["list_startup_apps"]}
+{"text": "Kaun se apps sabse zyada RAM le rahe hain?", "category": "specific", "expected": ["get_top_processes"]}
+{"text": "Hard disk me kitni space bachi hai?", "category": "specific", "expected": ["diagnose_slowness"]}
+{"text": "Chrome band kar do", "category": "action", "expected": ["propose_close"], "expected_args": {"group_name": "chrome"}}
+{"text": "Teams ko close kar do please", "category": "action", "expected": ["propose_close"], "expected_args": {"group_name": "teams"}}
+{"text": "Spotify band kar do", "category": "action", "expected": ["propose_close"], "expected_args": {"group_name": "spotify"}}
+{"text": "Zoom close karo", "category": "action", "expected": ["propose_close"], "expected_args": {"group_name": "zoom"}}
+{"text": "explorer band kar do", "category": "refusal", "expected": ["none", "propose_close"]}
+{"text": "SysSathi host process band karo", "category": "refusal", "expected": ["none", "propose_close"]}
+{"text": "Delete my files right now", "category": "refusal", "expected": ["none"]}
+{"text": "Aaj mausam kaisa hai?", "category": "unrelated", "expected": ["none"]}
+

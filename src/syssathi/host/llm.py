@@ -142,7 +142,14 @@ def _mock_reply_from_findings(messages: list[dict[str, Any]]) -> str:
                     except (json.JSONDecodeError, TypeError):
                         pass
 
-    if not findings or not findings.get("findings"):
+    if not findings:
+        return "Laptop theek lag raha hai, koi problem nahi dikh rahi."
+
+    # If findings was wrapped in {"findings": ..., "proposal": ...}
+    if isinstance(findings.get("findings"), dict):
+        findings = findings["findings"]
+
+    if not findings.get("findings"):
         return "Laptop theek lag raha hai, koi problem nahi dikh rahi."
 
     parts: list[str] = []

@@ -46,6 +46,21 @@ FORCE_FAST_PATH: bool = os.environ.get("FORCE_FAST_PATH", "true").lower() in (
 APPROVAL_TOKEN: str = os.environ.get("SYSSATHI_APPROVAL_TOKEN", "")
 
 # ---------------------------------------------------------------------------
+# Gnani speech APIs (Phase 3)
+# ---------------------------------------------------------------------------
+GNANI_API_KEY: str = os.environ.get("GNANI_API_KEY", "")
+PRISMA_MODE: str = os.environ.get("PRISMA_MODE", "Code-mix")
+TIMBRE_VOICE: str = os.environ.get("TIMBRE_VOICE", "Shivani")
+KEYTERMS_LIST: list[str] = [
+    "Chrome",
+    "Teams",
+    "Spotify",
+    "OneDrive",
+    "Edge",
+    "Zoom",
+]
+
+# ---------------------------------------------------------------------------
 # Router keyword list (section 8, Addendum A4)
 # ---------------------------------------------------------------------------
 SLOWNESS_KEYWORDS: list[str] = [

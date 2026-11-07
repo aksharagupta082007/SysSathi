@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SysSathi — Voice Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --border: #334155;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+      padding: 24px;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .subtitle {
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      margin-bottom: 20px;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--border);
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+    .status-badge.active {
+      background: #1e3a8a;
+      color: #93c5fd;
+    }
+    .status-badge.muted {
+      background: #7f1d1d;
+      color: #fca5a5;
+    }
+    .box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      min-height: 48px;
+    }
+    .box-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .box-content {
+      font-size: 1rem;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+      margin-top: 20px;
+    }
+    button#talkBtn {
+      width: 100%;
+      height: 60px;
+      border-radius: 8px;
+      border: none;
+      background: var(--primary);
+      color: white;
+      font-size: 1.125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    button#talkBtn:hover {
+      background: var(--primary-hover);
+    }
+    button#talkBtn:active, button#talkBtn.recording {
+      background: var(--danger);
+      transform: scale(0.98);
+    }
+    button#approveBtn {
+      width: 100%;
+      height: 48px;
+      border-radius: 8px;
+      border: 1px solid var(--success);
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: none;
+      transition: all 0.2s;
+    }
+    button#approveBtn:hover:not(:disabled) {
+      background: rgba(16, 185, 129, 0.3);
+    }
+    button#approveBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SysSathi <span>⚡</span></h1>
+    <div class="subtitle">Windows Slowness Diagnostic Assistant</div>
+    <div id="statusBadge" class="status-badge">Ready</div>
+
+    <div class="box">
+      <div class="box-title">Transcript</div>
+      <div id="transcriptBox" class="box-content">Hold the button below and speak...</div>
+    </div>
+
+    <div class="box">
+      <div class="box-title">Assistant Reply</div>
+      <div id="replyBox" class="box-content">—</div>
+    </div>
+
+    <div id="proposalContainer" class="box" style="display: none;">
+      <div class="box-title">Pending Action Proposal</div>
+      <div id="proposalBox" class="box-content">—</div>
+    </div>
+
+    <div class="controls">
+      <button id="talkBtn">Hold to Talk</button>
+      <button id="approveBtn" disabled>Approve Action</button>
+    </div>
+  </div>
+
+  <script>
+    const talkBtn = document.getElementById("talkBtn");
+    const approveBtn = document.getElementById("approveBtn");
+    const statusBadge = document.getElementById("statusBadge");
+    const transcriptBox = document.getElementById("transcriptBox");
+    const replyBox = document.getElementById("replyBox");
+    const proposalContainer = document.getElementById("proposalContainer");
+    const proposalBox = document.getElementById("proposalBox");
+
+    let audioContext = null;
+    let mediaStream = null;
+    let audioProcessor = null;
+    let websocket = null;
+    let isRecording = false;
+
+    function setStatus(text, type = "normal") {
+      statusBadge.textContent = text;
+      statusBadge.className = "status-badge";
+      if (type === "active") statusBadge.classList.add("active");
+      if (type === "muted") statusBadge.classList.add("muted");
+    }
+
+    // Audio Playback
+    let audioQueue = [];
+    let isPlaying = false;
+
+    function playAudioChunk(arrayBuffer) {
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioQueue.push(arrayBuffer);
+      if (!isPlaying) processAudioQueue();
+    }
+
+    async function processAudioQueue() {
+      if (audioQueue.length === 0) {
+        isPlaying = false;
+        setStatus("Ready");
+        return;
+      }
+      isPlaying = true;
+      setStatus("Speaking (Mic Muted)", "muted");
+      const buffer = audioQueue.shift();
+      try {
+        const decoded = await audioContext.decodeAudioData(buffer);
+        const source = audioContext.createBufferSource();
+        source.buffer = decoded;
+        source.connect(audioContext.destination);
+        source.onended = () => processAudioQueue();
+        source.start();
+      } catch (err) {
+        console.error("Audio playback error:", err);
+        processAudioQueue();
+      }
+    }
+
+    async function startRecording() {
+      if (isPlaying) return; // Mic muted while audio plays
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 }
+        });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(mediaStream);
+
+        // Connect WebSocket
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        websocket = new WebSocket(`${protocol}//${window.location.host}/ws/talk`);
+        websocket.binaryType = "arraybuffer";
+
+        websocket.onopen = () => {
+          setStatus("Listening...", "active");
+          isRecording = true;
+          talkBtn.classList.add("recording");
+          talkBtn.textContent = "Release to Send";
+        };
+
+        websocket.onmessage = (event) => {
+          if (typeof event.data === "string") {
+            const data = JSON.parse(event.data);
+            if (data.type === "transcript") {
+              transcriptBox.textContent = data.text;
+            } else if (data.type === "reply") {
+              replyBox.textContent = data.text;
+            } else if (data.type === "proposal") {
+              proposalContainer.style.display = "block";
+              proposalBox.textContent = data.description;
+              approveBtn.style.display = "block";
+              approveBtn.disabled = false;
+              // Addendum A5: 60-second proposal expiry timer
+              setTimeout(() => {
+                if (!approveBtn.disabled) {
+                  approveBtn.disabled = true;
+                  setStatus("Proposal expired");
+                }
+              }, 60000);
+            } else if (data.type === "status") {
+              setStatus(data.text);
+            }
+          } else {
+            // Binary audio chunk from TTS
+            playAudioChunk(event.data);
+          }
+        };
+
+        // Capture raw PCM 16-bit
+        const bufferSize = 2048;
+        audioProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+        source.connect(audioProcessor);
+        audioProcessor.connect(audioContext.destination);
+
+        audioProcessor.onaudioprocess = (e) => {
+          if (!isRecording || websocket.readyState !== WebSocket.OPEN) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          // Convert float32 to int16 PCM
+          const pcm16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          websocket.send(pcm16.buffer);
+        };
+      } catch (err) {
+        console.error("Microphone access error:", err);
+        setStatus("Mic Access Denied");
+      }
+    }
+
+    function stopRecording() {
+      if (!isRecording) return;
+      isRecording = false;
+      talkBtn.classList.remove("recording");
+      talkBtn.textContent = "Hold to Talk";
+      setStatus("Processing...");
+
+      if (audioProcessor) {
+        audioProcessor.disconnect();
+        audioProcessor = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(JSON.stringify({ type: "eof" }));
+      }
+    }
+
+    talkBtn.addEventListener("mousedown", startRecording);
+    talkBtn.addEventListener("mouseup", stopRecording);
+    talkBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
+    talkBtn.addEventListener("touchend", (e) => { e.preventDefault(); stopRecording(); });
+
+    // Wire Approve button
+    approveBtn.addEventListener("click", async () => {
+      approveBtn.disabled = true;
+      setStatus("Approving action...");
+      const nonceMeta = document.querySelector('meta[name="syssathi-nonce"]');
+      const nonce = nonceMeta ? nonceMeta.content : "";
+
+      try {
+        const resp = await fetch("/api/approve", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-SysSathi-Nonce": nonce,
+          },
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          replyBox.textContent = data.spoken_reply;
+          setStatus("Action Complete");
+          proposalContainer.style.display = "none";
+        } else {
+          replyBox.textContent = data.spoken_reply || data.detail || "Approval failed";
+          setStatus("Approval Failed");
+        }
+      } catch (err) {
+        console.error("Approve request failed:", err);
+        setStatus("Network Error");
+      }
+    });
+  </script>
+</body>
+</html>
+
