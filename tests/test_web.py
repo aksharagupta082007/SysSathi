@@ -12,6 +12,7 @@ class TestWebApp:
     @pytest.fixture(autouse=True)
     def _force_mock_backend(self, monkeypatch):
         monkeypatch.setenv("SYSSATHI_LLM_BACKEND", "mock")
+        monkeypatch.setattr("syssathi.host.config.LLM_BACKEND", "mock")
 
     def test_get_index_contains_nonce_and_no_approval_token(self):
         with TestClient(app) as client:

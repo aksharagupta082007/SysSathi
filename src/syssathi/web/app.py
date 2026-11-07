@@ -100,10 +100,23 @@ async def post_approve(
     # Build confirmation message
     spoken_reply = format_remeasure_reply(execution_result, before_findings)
 
+    # Synthesize spoken confirmation via Timbre if configured
+    audio_base64: str | None = None
+    if spoken_reply:
+        try:
+            timbre = TimbreClient()
+            if timbre.api_key:
+                audio_bytes = await timbre.synthesize_sentence(spoken_reply)
+                import base64
+                audio_base64 = base64.b64encode(audio_bytes).decode("ascii")
+        except Exception as e:
+            logger.warning("Failed to synthesize approve audio: %s", e)
+
     return {
         "success": not ("error" in execution_result or execution_result.get("refused")),
         "result": execution_result,
         "spoken_reply": spoken_reply,
+        "audio_base64": audio_base64,
     }
 
 
@@ -137,9 +150,14 @@ async def websocket_talk(websocket: WebSocket) -> None:
     # For offline testing or if mock / empty audio
     user_text = "Mera laptop slow chal raha hai"
     if prisma.api_key and audio_buffer:
-        temp_audio = Path("/tmp/syssathi_recording.pcm")
-        temp_audio.write_bytes(audio_buffer)
+        temp_audio = Path("/tmp/syssathi_recording.wav")
         try:
+            import wave
+            with wave.open(str(temp_audio), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(audio_buffer)
             user_text = await prisma.transcribe_file(temp_audio)
         except Exception as e:
             logger.warning("Prisma transcription failed, using fallback: %s", e)

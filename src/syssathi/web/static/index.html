@@ -338,6 +338,16 @@
           replyBox.textContent = data.spoken_reply;
           setStatus("Action Complete");
           proposalContainer.style.display = "none";
+          if (data.audio_base64) {
+            try {
+              const binary = atob(data.audio_base64);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              playAudioChunk(bytes.buffer);
+            } catch (playErr) {
+              console.error("Failed to play approve audio:", playErr);
+            }
+          }
         } else {
           replyBox.textContent = data.spoken_reply || data.detail || "Approval failed";
           setStatus("Approval Failed");
