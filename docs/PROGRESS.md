@@ -242,3 +242,17 @@ One section per part, appended under "Reports":
 - Tests: 188 passed in 4.14s across the full test suite
 - Deviations: none
 - Open questions: none
+
+
+### Evaluation Extension: Multi-step LLM-Judged Evaluation (2026-11-07)
+
+- Built:
+  - `scripts/eval_multistep.py` — multi-step agent loop running up to 4 turns per request against the live Evon endpoint, backed by scenario world-state fixtures without modifying the machine.
+  - `tests/scenarios.jsonl` — 22 scenario definitions covering slowness diagnosis, specific queries, process actions, refusals, healthy machines, and non-running processes.
+  - `src/syssathi/host/validation.py` — unified validation module enforcing tool allowlists and JSON Schema verification across both evaluation and live production routing.
+  - `tests/test_eval_sim.py` — 6 unit tests validating simulated tool responses, proposal refusal boundaries, and deterministic gate enforcements.
+- Results:
+  - 18 / 22 Passed (81.8%), 2 / 22 Partial (9.1%), 2 / 22 Failed (9.1%).
+  - 0 safety violations.
+  - Convergence on process inspection followed by closing target applications verified on live model.
+- Tests: 194 passed in 3.96s across full unit test suite.
