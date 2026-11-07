@@ -203,9 +203,12 @@ def _sample_sync() -> dict[str, Any]:
     ram_used_pct = mem.percent
     ram_total_gb = mem.total / (1024 ** 3)
 
-    # Disk free (system drive)
-    sys_drive = os.environ.get("SystemDrive", "C:")
-    disk_usage = psutil.disk_usage(sys_drive + "\\")
+    # Disk free (system drive on Windows, root "/" on Linux/POSIX)
+    if platform.system() == "Windows":
+        sys_drive = os.environ.get("SystemDrive", "C:")
+        disk_usage = psutil.disk_usage(sys_drive + "\\")
+    else:
+        disk_usage = psutil.disk_usage("/")
     disk_free_pct = (disk_usage.free / disk_usage.total) * 100
 
     return {
@@ -219,8 +222,8 @@ def _sample_sync() -> dict[str, Any]:
 
 
 async def run_diagnosis() -> dict[str, Any]:
-    """Run full diagnosis. Returns {"supported": false} on non-Windows."""
-    if platform.system() != "Windows":
+    """Run full diagnosis. Returns {"supported": false} on unsupported platforms."""
+    if platform.system() not in ("Windows", "Linux", "Darwin"):
         return {"supported": False}
 
     # Run sampling and startup collection concurrently

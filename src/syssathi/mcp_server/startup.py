@@ -62,42 +62,56 @@ def _read_startup_folder(folder: Path) -> list[str]:
 
 
 def _list_startup_sync() -> dict[str, Any]:
-    """Collect startup apps from registry and folders (Windows only)."""
-    import winreg
+    """Collect startup apps from registry/folders on Windows, or autostart folders on Linux."""
+    if platform.system() == "Windows":
+        import winreg
 
-    registry_entries: list[tuple[str, str]] = []
+        registry_entries: list[tuple[str, str]] = []
 
-    # HKCU Run
-    registry_entries.extend(
-        _read_registry_run_key(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Run",
-            "HKCU_Run",
+        # HKCU Run
+        registry_entries.extend(
+            _read_registry_run_key(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                "HKCU_Run",
+            )
         )
-    )
-    # HKLM Run
-    registry_entries.extend(
-        _read_registry_run_key(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"Software\Microsoft\Windows\CurrentVersion\Run",
-            "HKLM_Run",
+        # HKLM Run
+        registry_entries.extend(
+            _read_registry_run_key(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                "HKLM_Run",
+            )
         )
-    )
 
-    # Startup folders
-    folder_entries: list[str] = []
-    user_startup = Path(os.environ.get("APPDATA", "")) / r"Microsoft\Windows\Start Menu\Programs\Startup"
-    common_startup = Path(os.environ.get("PROGRAMDATA", "")) / r"Microsoft\Windows\Start Menu\Programs\Startup"
-    folder_entries.extend(_read_startup_folder(user_startup))
-    folder_entries.extend(_read_startup_folder(common_startup))
+        # Startup folders
+        folder_entries: list[str] = []
+        user_startup = Path(os.environ.get("APPDATA", "")) / r"Microsoft\Windows\Start Menu\Programs\Startup"
+        common_startup = Path(os.environ.get("PROGRAMDATA", "")) / r"Microsoft\Windows\Start Menu\Programs\Startup"
+        folder_entries.extend(_read_startup_folder(user_startup))
+        folder_entries.extend(_read_startup_folder(common_startup))
 
-    entries = parse_startup_entries(registry_entries, folder_entries)
-    return {"entries": entries, "count": len(entries)}
+        entries = parse_startup_entries(registry_entries, folder_entries)
+        return {"entries": entries, "count": len(entries)}
+
+    elif platform.system() == "Linux":
+        folder_entries = []
+        user_autostart = Path.home() / ".config" / "autostart"
+        sys_autostart = Path("/etc/xdg/autostart")
+        folder_entries.extend(_read_startup_folder(user_autostart))
+        folder_entries.extend(_read_startup_folder(sys_autostart))
+        # Strip .desktop extension
+        cleaned = [f[:-8] if f.endswith(".desktop") else f for f in folder_entries]
+        entries = parse_startup_entries([], cleaned)
+        return {"entries": entries, "count": len(entries)}
+
+    return {"entries": [], "count": 0}
 
 
 async def list_startup_apps() -> dict[str, Any]:
-    """List startup apps. Returns {"supported": false} on non-Windows."""
-    if platform.system() != "Windows":
+    """List startup apps. Returns {"supported": false} on unsupported OS."""
+    if platform.system() not in ("Windows", "Linux"):
         return {"supported": False}
     return await asyncio.to_thread(_list_startup_sync)
 

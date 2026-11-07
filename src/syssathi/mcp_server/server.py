@@ -38,7 +38,7 @@ async def get_top_processes(
 ) -> dict[str, Any]:
     """Return the top process groups sorted by RAM or CPU usage."""
     import platform
-    if platform.system() != "Windows":
+    if platform.system() not in ("Windows", "Linux", "Darwin"):
         return {"supported": False}
 
     from syssathi.mcp_server.processes import sample_processes

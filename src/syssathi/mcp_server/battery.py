@@ -90,22 +90,59 @@ def _run_ps_command(class_name: str) -> str | None:
     return None
 
 
+def _get_linux_battery_capacities() -> tuple[str | None, str | None]:
+    """Read full charge and design capacities from /sys/class/power_supply/ on Linux."""
+    from pathlib import Path
+
+    ps_path = Path("/sys/class/power_supply")
+    if not ps_path.exists():
+        return None, None
+    for bat in ps_path.glob("BAT*"):
+        designed: int | None = None
+        full: int | None = None
+        for design_key in ("energy_full_design", "charge_full_design"):
+            p = bat / design_key
+            if p.exists():
+                try:
+                    designed = int(p.read_text().strip())
+                    break
+                except (ValueError, OSError):
+                    pass
+        for full_key in ("energy_full", "charge_full"):
+            p = bat / full_key
+            if p.exists():
+                try:
+                    full = int(p.read_text().strip())
+                    break
+                except (ValueError, OSError):
+                    pass
+        if designed and full:
+            return json.dumps({"DesignedCapacity": designed}), json.dumps({"FullChargedCapacity": full})
+    return None, None
+
+
 def _get_battery_sync() -> dict[str, Any]:
-    """Collect battery data (Windows only)."""
+    """Collect battery data (Windows and Linux)."""
     import psutil
 
     battery = psutil.sensors_battery()
     if battery is None:
         return parse_battery(None, None, None)
 
-    ps_static = _run_ps_command("BatteryStaticData")
-    ps_fullcharge = _run_ps_command("BatteryFullChargedCapacity")
+    if platform.system() == "Windows":
+        ps_static = _run_ps_command("BatteryStaticData")
+        ps_fullcharge = _run_ps_command("BatteryFullChargedCapacity")
+    elif platform.system() == "Linux":
+        ps_static, ps_fullcharge = _get_linux_battery_capacities()
+    else:
+        ps_static, ps_fullcharge = None, None
+
     return parse_battery(battery, ps_static, ps_fullcharge)
 
 
 async def get_battery_report() -> dict[str, Any]:
-    """Get battery report. Returns {"supported": false} on non-Windows."""
-    if platform.system() != "Windows":
+    """Get battery report. Returns {"supported": false} on unsupported OS."""
+    if platform.system() not in ("Windows", "Linux", "Darwin"):
         return {"supported": False}
     return await asyncio.to_thread(_get_battery_sync)
 
