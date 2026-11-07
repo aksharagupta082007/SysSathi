@@ -39,9 +39,9 @@ async def main() -> None:
                 if "error" in res or res.get("refused"):
                     print(f"SysSathi > Action execute nahi ho paya: {res.get('reason') or res.get('error')}\n")
                 else:
-                    closed = res.get("closed_count", 0)
-                    skipped = res.get("skipped_count", 0)
-                    failed = res.get("failed_count", 0)
+                    closed = res.get("closed", res.get("closed_count", 0))
+                    skipped = res.get("skipped", res.get("skipped_count", 0))
+                    failed = res.get("failed", res.get("failed_count", 0))
                     print(f"SysSathi > Action complete: {closed} band hue, {skipped} skip hue, {failed} fail hue.\n")
                 continue
 

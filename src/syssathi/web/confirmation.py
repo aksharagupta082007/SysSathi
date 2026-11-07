@@ -26,12 +26,12 @@ def format_remeasure_reply(
             text = f"Action execute nahi ho paya: {reason}."
         return apply_reply_guard(text)
 
-    closed = execution_result.get("closed_count", 0)
-    skipped = execution_result.get("skipped_count", 0)
-    failed = execution_result.get("failed_count", 0)
+    closed = execution_result.get("closed_count", execution_result.get("closed", 0))
+    skipped = execution_result.get("skipped_count", execution_result.get("skipped", 0))
+    failed = execution_result.get("failed_count", execution_result.get("failed", 0))
 
     # After diagnosis
-    after_diag = execution_result.get("diagnosis", {})
+    after_diag = execution_result.get("fresh_diagnosis") or execution_result.get("diagnosis", {})
     before_ram = before_findings.get("ram_used_pct") if before_findings else None
     after_ram = after_diag.get("ram_used_pct") if isinstance(after_diag, dict) else None
 

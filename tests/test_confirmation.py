@@ -52,3 +52,15 @@ class TestConfirmationSpeech:
         reply = format_remeasure_reply(exec_res, None)
         assert "pehle hi execute ho chuka hai" in reply
 
+    def test_raw_execute_action_schema(self):
+        exec_res = {
+            "closed": 14,
+            "skipped": 0,
+            "failed": 0,
+            "fresh_diagnosis": {"ram_used_pct": 64.2},
+        }
+        before = {"ram_used_pct": 91.0}
+        reply = format_remeasure_reply(exec_res, before)
+        assert "RAM 91% se 64% ho gaya" in reply
+        assert len(reply.split()) <= 40
+
