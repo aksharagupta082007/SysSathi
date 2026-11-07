@@ -37,10 +37,11 @@ class PrismaClient:
             raise FileNotFoundError(f"Audio file not found: {path}")
 
         headers = {"X-API-Key-ID": self.api_key}
+        format_val = self.mode.lower().replace("-", "").replace("_", "")
         data = {
             "model": "prisma-v3.0",
             "language_code": "indic-auto",
-            "format": self.mode.lower(),
+            "format": format_val,
             "keyterms": ", ".join(self.keyterms),
         }
 

@@ -81,10 +81,11 @@ def probe_prisma(api_key: str, audio_path: str, mode: str) -> None:
 
     with open(path, "rb") as f:
         files = {"audio_file": (path.name, f, "audio/wav")}
+        format_val = mode.lower().replace("-", "").replace("_", "")
         data = {
             "model": "prisma-v3.0",
             "language_code": "indic-auto",
-            "format": mode.lower(),
+            "format": format_val,
             "keyterms": "Chrome, Teams, Spotify, OneDrive, Edge, Zoom",
         }
 
