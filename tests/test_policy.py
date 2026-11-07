@@ -67,11 +67,15 @@ class TestIsProtected:
 
 class TestThresholds:
     def test_defaults(self):
-        th = get_thresholds()
-        assert th["RAM_HIGH_PCT"] == 85.0
-        assert th["DISK_LOW_PCT"] == 10.0
-        assert th["STARTUP_HIGH_COUNT"] == 8
-        assert th["CPU_HIGH_PCT"] == 80.0
+        env_without_thresholds = {
+            k: v for k, v in os.environ.items() if not k.startswith("SYSSATHI_")
+        }
+        with mock.patch.dict(os.environ, env_without_thresholds, clear=True):
+            th = get_thresholds()
+            assert th["RAM_HIGH_PCT"] == 85.0
+            assert th["DISK_LOW_PCT"] == 10.0
+            assert th["STARTUP_HIGH_COUNT"] == 8
+            assert th["CPU_HIGH_PCT"] == 80.0
 
     def test_env_override_ram(self):
         with mock.patch.dict(os.environ, {"SYSSATHI_RAM_HIGH_PCT": "90"}):

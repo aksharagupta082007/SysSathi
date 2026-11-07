@@ -45,6 +45,14 @@ PROTECTED_NAMES: frozenset[str] = frozenset({
     "fontdrvhost",
     "msmpeng",
     "securityhealthservice",
+    # Development / shell safeguards
+    "agy",
+    "antigravity",
+    "code",
+    "bash",
+    "wsl",
+    "wslhost",
+    "init",
 })
 
 

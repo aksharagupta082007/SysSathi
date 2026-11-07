@@ -1,8 +1,26 @@
 """Tests for diagnose.py — threshold boundaries and schema validation."""
 
+import os
+from unittest import mock
+
 import jsonschema
+import pytest
 
 from syssathi.mcp_server.diagnose import FINDINGS_SCHEMA, build_findings
+
+
+@pytest.fixture(autouse=True)
+def _standard_thresholds():
+    with mock.patch.dict(
+        os.environ,
+        {
+            "SYSSATHI_RAM_HIGH_PCT": "85.0",
+            "SYSSATHI_DISK_LOW_PCT": "10.0",
+            "SYSSATHI_STARTUP_HIGH_COUNT": "8",
+            "SYSSATHI_CPU_HIGH_PCT": "80.0",
+        },
+    ):
+        yield
 
 
 def _default_kwargs(**overrides):
