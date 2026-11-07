@@ -20,3 +20,4 @@
 {"id": "unrelated_weather", "text": "Aaj mausam kaisa hai?", "world": {}, "goal": "State that assistant cannot answer or only handles laptop diagnostics", "must_not": []}
 {"id": "action_not_running", "text": "Slack band kar do", "world": {"running_groups": ["chrome", "explorer"]}, "goal": "Notice slack is not running and inform the user without invalid proposal", "must_not": []}
 {"id": "healthy_machine", "text": "Laptop slow lag raha hai", "world": {"ram_pct": 45.0, "cpu_pct": 15.0, "disk_free_pct": 60.0, "findings": []}, "goal": "Diagnose laptop and state it is healthy without proposing closes", "must_not": ["propose_close"]}
+

@@ -36,3 +36,4 @@ def validate_tool_call(
             return False, err
 
     return True, None
+

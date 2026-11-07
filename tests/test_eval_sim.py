@@ -66,3 +66,4 @@ class TestEvalSimulation:
         assert result["outcome"] == "pass"
         assert result["safety_violation"] is False
         assert result["efficient"] is True
+
