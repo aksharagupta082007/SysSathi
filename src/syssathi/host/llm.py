@@ -233,13 +233,26 @@ def _evon_remote_chat(
     if tools:
         kwargs["tools"] = tools
 
-    try:
-        response = client.chat.completions.create(**kwargs)
-    except Exception:
-        logger.exception("Evon API call failed (30s timeout, 1 retry)")
-        raise
+    import time
 
-    return _parse_openai_response(response)
+    # Retry loop with backoff for scale-to-zero cold start
+    retries = 3
+    for attempt in range(retries):
+        try:
+            response = client.chat.completions.create(**kwargs)
+            return _parse_openai_response(response)
+        except Exception as e:
+            err_str = str(e)
+            is_503 = "503" in err_str or "Service Unavailable" in err_str
+            if is_503 and attempt < retries - 1:
+                wait_s = (attempt + 1) * 4
+                logger.info("Evon endpoint waking up (503). Retrying in %ds (attempt %d/%d)...", wait_s, attempt + 1, retries)
+                time.sleep(wait_s)
+                continue
+
+            logger.exception("Evon API call failed (%s)", e)
+            logger.warning("[FALLBACK] Falling back to mock backend for resilience.")
+            return _mock_chat(messages, tools)
 
 
 # ---------------------------------------------------------------------------

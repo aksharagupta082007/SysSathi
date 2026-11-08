@@ -33,24 +33,56 @@ INDEX_HTML = STATIC_DIR / "index.html"
 _mcp_client: MCPClient | None = None
 _orchestrator: Orchestrator | None = None
 _session_nonce: str = ""
+_keepalive_task: asyncio.Task | None = None
+
+
+async def _evon_keepalive_loop() -> None:
+    """Keep Evon endpoint warm while web server is running so it never scales to zero."""
+    from syssathi.host.config import EVON_BASE_URL, HF_TOKEN, LLM_BACKEND
+
+    if LLM_BACKEND != "evon_remote" or not EVON_BASE_URL:
+        return
+    import httpx
+
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
+    models_url = f"{EVON_BASE_URL.rstrip('/')}/models"
+    while True:
+        try:
+            await asyncio.sleep(45)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.get(models_url, headers=headers)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
 
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    global _mcp_client, _orchestrator, _session_nonce
+    global _mcp_client, _orchestrator, _session_nonce, _keepalive_task
     _session_nonce = secrets.token_hex(16)
     _mcp_client = MCPClient()
     await _mcp_client.start()
     _orchestrator = Orchestrator(_mcp_client)
+    _keepalive_task = asyncio.create_task(_evon_keepalive_loop())
     logger.info("SysSathi web server started on 127.0.0.1")
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
-    global _mcp_client
+    global _mcp_client, _keepalive_task
+    if _keepalive_task:
+        _keepalive_task.cancel()
+        _keepalive_task = None
     if _mcp_client:
         await _mcp_client.close()
         _mcp_client = None
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> HTMLResponse:
+    from fastapi.responses import Response
+    return Response(status_code=204)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -179,7 +211,11 @@ async def websocket_talk(websocket: WebSocket) -> None:
             pass
 
     # Orchestrator handles message and proposal
-    reply, _ = await _orchestrator.handle_message(user_text)
+    try:
+        reply, _ = await _orchestrator.handle_message(user_text)
+    except Exception as e:
+        logger.exception("Error during orchestrator message processing: %s", e)
+        reply = "Kshama karein, abhi diagnosis me dikkat aayi. Kripya dobara try karein."
     await websocket.send_text(json.dumps({"type": "reply", "text": reply}))
 
     if _orchestrator.pending_proposal:
