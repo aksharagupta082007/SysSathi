@@ -98,6 +98,59 @@
       align-items: center;
       margin-top: 20px;
     }
+    .text-form {
+      display: flex;
+      width: 100%;
+      gap: 8px;
+    }
+    input#textInput {
+      flex: 1;
+      height: 46px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0 14px;
+      font-size: 0.95rem;
+      outline: none;
+      box-sizing: border-box;
+    }
+    input#textInput:focus {
+      border-color: var(--primary);
+    }
+    button#sendBtn {
+      height: 46px;
+      padding: 0 20px;
+      border-radius: 8px;
+      border: none;
+      background: var(--primary);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button#sendBtn:hover {
+      background: var(--primary-hover);
+    }
+    .divider {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      margin: 2px 0;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .divider span {
+      padding: 0 10px;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
     button#talkBtn {
       width: 100%;
       height: 60px;
@@ -148,7 +201,7 @@
 
     <div class="box">
       <div class="box-title">Transcript</div>
-      <div id="transcriptBox" class="box-content">Hold the button below and speak...</div>
+      <div id="transcriptBox" class="box-content">Hold the button below or type a query...</div>
     </div>
 
     <div class="box">
@@ -162,6 +215,13 @@
     </div>
 
     <div class="controls">
+      <form id="textForm" class="text-form" onsubmit="sendText(event)">
+        <input id="textInput" type="text" placeholder="Type a message (e.g. laptop slow hai, battery report do)..." autocomplete="off" />
+        <button type="submit" id="sendBtn">Send</button>
+      </form>
+
+      <div class="divider"><span>OR</span></div>
+
       <button id="talkBtn">Hold to Talk</button>
       <button id="approveBtn" disabled>Approve Action</button>
     </div>
@@ -181,6 +241,7 @@
     let audioProcessor = null;
     let websocket = null;
     let isRecording = false;
+    let pcmQueue = [];
 
     function setStatus(text, type = "normal") {
       statusBadge.textContent = text;
@@ -221,8 +282,48 @@
       }
     }
 
-    async function startRecording() {
-      if (isPlaying) return; // Mic muted while audio plays
+    // Open/reconnect talk websocket with standard handlers
+    function openTalkSocket() {
+      if (websocket && (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING)) {
+        try { websocket.close(); } catch (_) {}
+      }
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      websocket = new WebSocket(`${protocol}//${window.location.host}/ws/talk`);
+      websocket.binaryType = "arraybuffer";
+
+      websocket.onmessage = (event) => {
+        if (typeof event.data === "string") {
+          const data = JSON.parse(event.data);
+          if (data.type === "transcript") {
+            transcriptBox.textContent = data.text;
+          } else if (data.type === "reply") {
+            replyBox.textContent = data.text;
+          } else if (data.type === "proposal") {
+            proposalContainer.style.display = "block";
+            proposalBox.textContent = data.description;
+            approveBtn.style.display = "block";
+            approveBtn.disabled = false;
+            // Addendum A5: 60-second proposal expiry timer
+            setTimeout(() => {
+              if (!approveBtn.disabled) {
+                approveBtn.disabled = true;
+                setStatus("Proposal expired");
+              }
+            }, 60000);
+          } else if (data.type === "status") {
+            setStatus(data.text);
+          }
+        } else {
+          // Binary audio chunk from TTS
+          playAudioChunk(event.data);
+        }
+      };
+      return websocket;
+    }
+
+    // Initialize microphone hardware and keep warm
+    async function initAudio() {
+      if (mediaStream && audioContext && audioProcessor) return true;
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 }
@@ -230,67 +331,73 @@
         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         const source = audioContext.createMediaStreamSource(mediaStream);
 
-        // Connect WebSocket
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        websocket = new WebSocket(`${protocol}//${window.location.host}/ws/talk`);
-        websocket.binaryType = "arraybuffer";
-
-        websocket.onopen = () => {
-          setStatus("Listening...", "active");
-          isRecording = true;
-          talkBtn.classList.add("recording");
-          talkBtn.textContent = "Release to Send";
-        };
-
-        websocket.onmessage = (event) => {
-          if (typeof event.data === "string") {
-            const data = JSON.parse(event.data);
-            if (data.type === "transcript") {
-              transcriptBox.textContent = data.text;
-            } else if (data.type === "reply") {
-              replyBox.textContent = data.text;
-            } else if (data.type === "proposal") {
-              proposalContainer.style.display = "block";
-              proposalBox.textContent = data.description;
-              approveBtn.style.display = "block";
-              approveBtn.disabled = false;
-              // Addendum A5: 60-second proposal expiry timer
-              setTimeout(() => {
-                if (!approveBtn.disabled) {
-                  approveBtn.disabled = true;
-                  setStatus("Proposal expired");
-                }
-              }, 60000);
-            } else if (data.type === "status") {
-              setStatus(data.text);
-            }
-          } else {
-            // Binary audio chunk from TTS
-            playAudioChunk(event.data);
-          }
-        };
-
-        // Capture raw PCM 16-bit
         const bufferSize = 2048;
         audioProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
         source.connect(audioProcessor);
         audioProcessor.connect(audioContext.destination);
 
         audioProcessor.onaudioprocess = (e) => {
-          if (!isRecording || websocket.readyState !== WebSocket.OPEN) return;
+          if (!isRecording) return;
           const inputData = e.inputBuffer.getChannelData(0);
-          // Convert float32 to int16 PCM
           const pcm16 = new Int16Array(inputData.length);
           for (let i = 0; i < inputData.length; i++) {
             const s = Math.max(-1, Math.min(1, inputData[i]));
             pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
           }
-          websocket.send(pcm16.buffer);
+          if (websocket && websocket.readyState === WebSocket.OPEN) {
+            while (pcmQueue.length > 0) {
+              websocket.send(pcmQueue.shift());
+            }
+            websocket.send(pcm16.buffer);
+          } else {
+            pcmQueue.push(pcm16.buffer);
+          }
         };
+        return true;
       } catch (err) {
         console.error("Microphone access error:", err);
         setStatus("Mic Access Denied");
+        return false;
       }
+    }
+
+    // Direct text submission
+    function sendText(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById("textInput");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+
+      setStatus("Thinking...", "active");
+      transcriptBox.textContent = text;
+      replyBox.textContent = "Processing with Evon...";
+      proposalContainer.style.display = "none";
+
+      const ws = openTalkSocket();
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "text", text: text }));
+      };
+    }
+
+    async function startRecording() {
+      if (isPlaying) return; // Mic muted while audio plays
+      const ok = await initAudio();
+      if (!ok) return;
+
+      pcmQueue = [];
+      isRecording = true;
+      talkBtn.classList.add("recording");
+      talkBtn.textContent = "Release to Send";
+      setStatus("Listening...", "active");
+      proposalContainer.style.display = "none";
+
+      const ws = openTalkSocket();
+      ws.onopen = () => {
+        while (pcmQueue.length > 0) {
+          ws.send(pcmQueue.shift());
+        }
+      };
     }
 
     function stopRecording() {
@@ -298,25 +405,26 @@
       isRecording = false;
       talkBtn.classList.remove("recording");
       talkBtn.textContent = "Hold to Talk";
-      setStatus("Processing...");
+      setStatus("Processing with Prisma & Evon...");
 
-      if (audioProcessor) {
-        audioProcessor.disconnect();
-        audioProcessor = null;
-      }
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(t => t.stop());
-        mediaStream = null;
-      }
-      if (websocket && websocket.readyState === WebSocket.OPEN) {
-        websocket.send(JSON.stringify({ type: "eof" }));
-      }
+      // Allow final packet to flush then send EOF
+      setTimeout(() => {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+          while (pcmQueue.length > 0) {
+            websocket.send(pcmQueue.shift());
+          }
+          websocket.send(JSON.stringify({ type: "eof" }));
+        }
+      }, 100);
     }
 
     talkBtn.addEventListener("mousedown", startRecording);
     talkBtn.addEventListener("mouseup", stopRecording);
     talkBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
     talkBtn.addEventListener("touchend", (e) => { e.preventDefault(); stopRecording(); });
+
+    // Pre-request mic on first mouse hover or touch for instant responsiveness
+    talkBtn.addEventListener("mouseenter", () => { initAudio(); }, { once: true });
 
     // Wire Approve button
     approveBtn.addEventListener("click", async () => {

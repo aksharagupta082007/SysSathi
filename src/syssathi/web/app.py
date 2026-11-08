@@ -164,6 +164,7 @@ async def websocket_talk(websocket: WebSocket) -> None:
     timbre = TimbreClient()
     timer = Timer()
     audio_buffer = bytearray()
+    user_text: str | None = None
 
     try:
         while True:
@@ -172,29 +173,49 @@ async def websocket_talk(websocket: WebSocket) -> None:
                 audio_buffer.extend(msg["bytes"])
             elif "text" in msg and msg["text"]:
                 data = json.loads(msg["text"])
-                if data.get("type") == "eof":
+                if data.get("type") == "text":
+                    user_text = data.get("text", "").strip()
+                    break
+                elif data.get("type") == "eof":
                     break
     except WebSocketDisconnect:
         return
 
-    # Process received audio with Prisma
-    timer.mark("stt_start")
-    # For offline testing or if mock / empty audio
-    user_text = "Mera laptop slow chal raha hai"
-    if prisma.api_key and audio_buffer:
-        temp_audio = Path("/tmp/syssathi_recording.wav")
-        try:
-            import wave
-            with wave.open(str(temp_audio), "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(16000)
-                wf.writeframes(audio_buffer)
-            user_text = await prisma.transcribe_file(temp_audio)
-        except Exception as e:
-            logger.warning("Prisma transcription failed, using fallback: %s", e)
+    # Process received audio with Prisma if text was not directly sent
+    if user_text is None:
+        timer.mark("stt_start")
+        if prisma.api_key and audio_buffer and len(audio_buffer) >= 1600:
+            temp_audio = Path("/tmp/syssathi_recording.wav")
+            try:
+                import wave
+                with wave.open(str(temp_audio), "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(16000)
+                    wf.writeframes(audio_buffer)
+                transcribed = await prisma.transcribe_file(temp_audio)
+                user_text = transcribed.strip() if transcribed else ""
+                logger.info("Prisma transcribed (%d audio bytes): %r", len(audio_buffer), user_text)
+            except Exception as e:
+                logger.warning("Prisma transcription failed: %s", e)
+                user_text = ""
+        elif not prisma.api_key and not audio_buffer:
+            # Fallback for offline testing without mic/audio
+            user_text = "Mera laptop slow chal raha hai"
+        else:
+            user_text = ""
+        timer.mark("stt_ms")
 
-    timer.mark("stt_ms")
+    # If no intelligible text or audio was provided
+    if not user_text:
+        await websocket.send_text(json.dumps({"type": "transcript", "text": "(Awaaz nahi aayi)"}))
+        await websocket.send_text(json.dumps({
+            "type": "reply",
+            "text": "Awaaz sunayi nahi di, kripya thoda lamba bolein ya type karein.",
+        }))
+        await websocket.send_text(json.dumps({"type": "status", "text": "Ready"}))
+        return
+
     await websocket.send_text(json.dumps({"type": "transcript", "text": user_text}))
 
     # Check route
