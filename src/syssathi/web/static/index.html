@@ -762,6 +762,7 @@
     // WebSocket Management
     let websocket = null;
     let currentAssistantBubble = null;
+    let isVoiceTurn = false;
 
     function openTalkSocket() {
       if (websocket && (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING)) {
@@ -775,7 +776,11 @@
         if (typeof event.data === "string") {
           const data = JSON.parse(event.data);
           if (data.type === "transcript") {
-            // Already appended or updated
+            if (isVoiceTurn && data.text && data.text !== "(Awaaz nahi aayi)") {
+              appendMessage("user", data.text);
+              currentAssistantBubble = appendMessage("assistant", "Thinking...");
+              isVoiceTurn = false;
+            }
           } else if (data.type === "reply") {
             if (currentAssistantBubble) {
               currentAssistantBubble.textContent = data.text;
@@ -873,6 +878,7 @@
 
       pcmQueue = [];
       isRecording = true;
+      isVoiceTurn = true;
       talkBtn.classList.add("recording");
       talkBtnText.textContent = prefs.tapMode ? "Tap to Stop" : "Release to Send";
       setStatus("Listening...", "active");
@@ -933,6 +939,7 @@
       if (!text) return;
       textInput.value = "";
 
+      isVoiceTurn = false;
       appendMessage("user", text);
       currentAssistantBubble = appendMessage("assistant", "Thinking...");
       setStatus("Thinking...", "active");

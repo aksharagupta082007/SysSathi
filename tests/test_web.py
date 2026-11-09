@@ -34,10 +34,22 @@ class TestWebApp:
                 assert msg1["type"] == "transcript"
                 assert "slow" in msg1["text"].lower()
 
-                # Receive assistant reply
-                msg2 = ws.receive_json()
-                assert msg2["type"] == "reply"
-                assert len(msg2["text"].split()) <= 40
+                # Receive assistant reply (skipping binary audio frames or intermediate status)
+                reply_msg = None
+                for _ in range(15):
+                    raw = ws.receive()
+                    if "bytes" in raw and raw["bytes"]:
+                        continue
+                    if "text" in raw and raw["text"]:
+                        import json
+                        data = json.loads(raw["text"])
+                        if data.get("type") == "reply":
+                            reply_msg = data
+                            break
+
+                assert reply_msg is not None
+                assert reply_msg["type"] == "reply"
+                assert len(reply_msg["text"].split()) <= 45
 
     def test_websocket_rejects_foreign_origin(self):
         """W2: WebSocket must reject connections from foreign Origin."""

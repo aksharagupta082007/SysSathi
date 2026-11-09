@@ -47,17 +47,39 @@ class ChatResult:
 # ---------------------------------------------------------------------------
 
 def strip_think(text: str) -> str:
-    """Remove <think>...</think> blocks from *text*.
-
-    - Closed blocks (possibly multiple) are removed entirely.
-    - An unclosed <think> drops everything from it to the end.
-    """
-    # First remove all closed blocks (non-greedy, handles multiple)
+    """Remove <think>...</think> blocks from *text* and clean reasoning preambles."""
+    if not text:
+        return ""
+    # 1. Remove closed <think>...</think> tags
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    # Then handle unclosed <think>: drop from <think> to end
+    # 2. Remove unclosed <think> tag to the end
     idx = text.find("<think>")
     if idx != -1:
         text = text[:idx]
+
+    # 3. Handle reasoning models (Evon/Qwen) that emit chain-of-thought without tags
+    # If the text has multiple paragraphs and leading paragraphs are model monologue
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paragraphs) > 1:
+        thought_prefixes = (
+            "okay,", "we are given", "from the json", "key points", "translate",
+            "let me", "i should", "i need to", "the user", "now, respond",
+            "check word count", "so, the answer", "let's draft", "the response should",
+            "looking at the", "check if all", "to close an app, i need", "so step 1:",
+            "first, i'll", "first, let's", "first, i should", "first, let me",
+            "first, check", "so, i should"
+        )
+        clean_paras = []
+        for p in reversed(paragraphs):
+            p_lower = p.lower()
+            if any(p_lower.startswith(pref) for pref in thought_prefixes):
+                break
+            clean_paras.insert(0, p)
+        if clean_paras:
+            text = "\n\n".join(clean_paras)
+        elif paragraphs:
+            text = paragraphs[-1]
+
     return text.strip()
 
 
@@ -465,6 +487,29 @@ def _parse_openai_response(response: Any) -> ChatResult:
                 except (json.JSONDecodeError, TypeError):
                     args = {"__unparseable_args__": args}
             tool_calls.append(ToolCall(name=tc.function.name, arguments=args))
+    elif content:
+        # Fallback for models emitting tool call JSON directly in content
+        try:
+            potential_json = None
+            trimmed = content.strip()
+            if trimmed.startswith("{") and trimmed.endswith("}"):
+                potential_json = json.loads(trimmed)
+            elif "```" in trimmed:
+                match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", trimmed, re.DOTALL)
+                if match:
+                    potential_json = json.loads(match.group(1))
+            if isinstance(potential_json, dict) and "name" in potential_json:
+                t_name = potential_json["name"]
+                t_args = potential_json.get("arguments", potential_json.get("parameters", {}))
+                if isinstance(t_args, str):
+                    try:
+                        t_args = json.loads(t_args)
+                    except Exception:
+                        t_args = {}
+                tool_calls.append(ToolCall(name=t_name, arguments=t_args))
+                content = ""
+        except Exception:
+            pass
 
     return ChatResult(content=content, tool_calls=tool_calls, raw=response)
 
