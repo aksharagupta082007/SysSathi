@@ -370,7 +370,9 @@ async def _evon_remote_chat(
                 continue
             logger.exception("Evon API call failed after retries: %s", e)
         except openai.APIStatusError as e:
-            if e.status_code == 503 and attempt < retries - 1:
+            if "endpoint is paused" in str(e).lower():
+                logger.error("Evon Hugging Face endpoint is currently PAUSED. Resume it on your HF Endpoints dashboard.")
+            elif e.status_code == 503 and attempt < retries - 1:
                 wait_s = min(4 * (attempt + 1), 10)
                 logger.info(
                     "Evon endpoint waking up (503). Retrying in %ds (attempt %d/%d)...",
