@@ -33,8 +33,8 @@ async def diagnose_slowness() -> dict[str, Any]:
 
 @mcp.tool()
 async def get_top_processes(
-    limit: Annotated[int, Field(ge=1, le=10, description="Number of process groups to return")],
-    sort_by: Annotated[Literal["ram", "cpu"], Field(description="Sort groups by ram or cpu usage")],
+    limit: Annotated[int, Field(ge=1, le=10, description="Number of process groups to return")] = 5,
+    sort_by: Annotated[Literal["ram", "cpu"], Field(description="Sort groups by ram or cpu usage")] = "ram",
 ) -> dict[str, Any]:
     """Return the top process groups sorted by RAM or CPU usage."""
     import platform

@@ -125,8 +125,53 @@ def _mock_chat(
 
 
 def _mock_reply_from_findings(messages: list[dict[str, Any]]) -> str:
-    """Build a deterministic Hinglish reply using only numbers from findings."""
-    # Look for findings JSON in messages
+    """Build a deterministic Hinglish reply using only numbers and data from tool results."""
+    # 1. Check for groups from get_top_processes
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str) and '"groups"' in content:
+            try:
+                match = re.search(r"\{.*\}", content, re.DOTALL)
+                if match:
+                    data = json.loads(match.group())
+                    groups = data.get("groups", [])
+                    if groups:
+                        top = groups[0]
+                        return f"Top process {top['name']} hai jo {top['ram_mb']} MB RAM aur {top['cpu_pct']}% CPU le raha hai."
+            except Exception:
+                pass
+
+    # 2. Check for startup apps from list_startup_apps
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str) and '"entries"' in content and '"count"' in content:
+            try:
+                match = re.search(r"\{.*\}", content, re.DOTALL)
+                if match:
+                    data = json.loads(match.group())
+                    count = data.get("count", 0)
+                    names = [e["name"] for e in data.get("entries", [])[:3]]
+                    names_str = ", ".join(names) if names else "koi app nahi"
+                    return f"Startup mein {count} apps hain: {names_str}."
+            except Exception:
+                pass
+
+    # 3. Check for battery report from get_battery_report
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str) and '"charge_pct"' in content:
+            try:
+                match = re.search(r"\{.*\}", content, re.DOTALL)
+                if match:
+                    data = json.loads(match.group())
+                    pct = data.get("charge_pct", 0)
+                    plugged = "charging par" if data.get("plugged") else "battery par"
+                    health = f", health {data.get('health_pct')}%" if "health_pct" in data else ""
+                    return f"Battery {pct}% charged hai aur {plugged} hai{health}."
+            except Exception:
+                pass
+
+    # 4. Look for findings JSON in messages
     findings: dict[str, Any] | None = None
     for msg in messages:
         content = msg.get("content", "")

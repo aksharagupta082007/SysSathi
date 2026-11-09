@@ -120,10 +120,11 @@ class MCPClient:
             if not tool:
                 continue
 
-            input_schema = getattr(tool, "inputSchema", None) or {
-                "type": "object",
-                "properties": {},
-            }
+            input_schema = (
+                getattr(tool, "input_schema", None)
+                or getattr(tool, "inputSchema", None)
+                or {"type": "object", "properties": {}}
+            )
 
             schemas.append({
                 "type": "function",
@@ -140,7 +141,11 @@ class MCPClient:
         tool = self._tools_cache.get(tool_name)
         if not tool:
             return None
-        return getattr(tool, "inputSchema", None) or {"type": "object", "properties": {}}
+        return (
+            getattr(tool, "input_schema", None)
+            or getattr(tool, "inputSchema", None)
+            or {"type": "object", "properties": {}}
+        )
 
     async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> Any:
         """Call a tool on the server and return parsed JSON or text."""
