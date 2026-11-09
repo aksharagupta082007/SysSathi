@@ -17,10 +17,11 @@ def format_remeasure_reply(
     Reuses reply guard (<=40 words).
     """
     if "error" in execution_result or execution_result.get("refused"):
-        reason = execution_result.get("reason") or execution_result.get("error") or "Proposal invalid hai"
-        if "expired" in str(reason).lower():
+        code = str(execution_result.get("code") or "")
+        reason = str(execution_result.get("reason") or execution_result.get("error") or "Proposal invalid hai")
+        if code == "EXPIRED" or "expired" in reason.lower():
             text = "Proposal expire ho gaya hai. Dobara check karein."
-        elif "used" in str(reason).lower():
+        elif code == "REUSED" or "used" in reason.lower() or "already been executed" in reason.lower():
             text = "Ye action pehle hi execute ho chuka hai."
         else:
             text = f"Action execute nahi ho paya: {reason}."

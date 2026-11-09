@@ -88,6 +88,14 @@ class TestTimingLine:
         for field in ("route", "llm1_ms", "tool_ms", "llm2_ms", "total_ms"):
             assert field in record, f"Missing field: {field}"
 
+    def test_span_context_manager(self, tmp_logs: Path) -> None:
+        t = Timer(logs_dir=tmp_logs)
+        with t.span("tool_ms"):
+            time.sleep(0.01)
+        record = t.flush()
+        assert "tool_ms" in record
+        assert record["tool_ms"] >= 5
+
 
 class TestTimerAutoDir:
     """Timer creates logs dir if it doesn't exist."""

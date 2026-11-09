@@ -68,3 +68,56 @@ class TestAuditLog:
         for line in lines:
             json.loads(line)  # must be valid JSON
 
+    def test_session_id_and_actor_logged(self, tmp_path: Path):
+        log_file = tmp_path / "audit.jsonl"
+        with mock.patch.object(audit, "LOGS_DIR", tmp_path), \
+             mock.patch.object(audit, "AUDIT_FILE", log_file):
+            audit.log_event(
+                tool="execute_action",
+                action_id="act-123",
+                group="chrome",
+                pids=[456],
+                result="executed",
+                session_id="sess-789",
+                actor="ui-click",
+            )
+        record = json.loads(log_file.read_text().strip())
+        assert record["session_id"] == "sess-789"
+        assert record["actor"] == "ui-click"
+
+    def test_rotation_on_large_file(self, tmp_path: Path):
+        log_file = tmp_path / "audit.jsonl"
+        backup_file = tmp_path / "audit.1.jsonl"
+        # Write dummy data over threshold
+        log_file.write_text("x" * 100)
+        with mock.patch.object(audit, "LOGS_DIR", tmp_path), \
+             mock.patch.object(audit, "AUDIT_FILE", log_file), \
+             mock.patch.object(audit, "MAX_LOG_SIZE", 50):
+            audit.log_event(tool="new_event", result="ok")
+
+        assert backup_file.exists()
+        assert log_file.exists()
+        new_record = json.loads(log_file.read_text().strip())
+        assert new_record["tool"] == "new_event"
+
+    def test_audit_scrubs_secrets_from_log(self, tmp_path: Path):
+        log_file = tmp_path / "audit.jsonl"
+        with mock.patch.object(audit, "LOGS_DIR", tmp_path), \
+             mock.patch.object(audit, "AUDIT_FILE", log_file):
+            audit.log_event(
+                tool="execute_action",
+                action_id="act-secret",
+                group="test_app",
+                result="Failed with auth token gnani_supersecretkey12345 and hf_tokenabcdefgh9876",
+                session_id="Bearer secret_token_value_abc",
+            )
+        raw_text = log_file.read_text(encoding="utf-8")
+        assert "gnani_supersecretkey12345" not in raw_text
+        assert "hf_tokenabcdefgh9876" not in raw_text
+        assert "secret_token_value_abc" not in raw_text
+        assert "[REDACTED_GNANI_TOKEN]" in raw_text
+        assert "[REDACTED_HF_TOKEN]" in raw_text
+        # Ensure it remains valid JSON
+        record = json.loads(raw_text.strip())
+        assert record["tool"] == "execute_action"
+

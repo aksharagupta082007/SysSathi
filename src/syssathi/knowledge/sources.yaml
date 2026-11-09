@@ -1,0 +1,46 @@
+# Curated Knowledge Sources Registry (§6.1)
+sources:
+  fmhy:
+    id: fmhy
+    name: FreeMediaHeckYeah (FMHY)
+    homepage: https://fmhy.net
+    ingest: git
+    repo: https://github.com/fmhy/edit
+    license: CC0-1.0
+    trust: community
+    refresh: weekly
+    include_sections: all
+    description: >
+      Community curated index of free media, tools, learning resources, and software.
+      Educate, don't block: all entries carry risk, safety, and neutral legal context notes.
+
+  wikipedia:
+    id: wikipedia
+    name: Wikipedia
+    homepage: https://www.wikipedia.org
+    ingest: api
+    license: CC-BY-SA-4.0
+    trust: encyclopedic
+    description: >
+      Multilingual encyclopedic summaries for computing concepts, networking, and terms.
+
+  ms_learn:
+    id: ms_learn
+    name: Microsoft Learn & Windows Docs
+    homepage: https://learn.microsoft.com
+    ingest: api
+    license: Open-Documentation
+    trust: official
+    description: >
+      Official Windows system documentation, error codes, and troubleshooting procedures.
+
+  eff_ssd:
+    id: eff_ssd
+    name: Electronic Frontier Foundation (EFF SSD)
+    homepage: https://ssd.eff.org
+    ingest: api
+    license: CC-BY-3.0
+    trust: official
+    description: >
+      Surveillance Self-Defense guides on encryption, passwords, VPNs, and privacy safety.
+

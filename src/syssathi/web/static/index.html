@@ -2,12 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SysSathi — Voice Assistant</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SysSathi — Multilingual Tech & Diagnostic Companion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1e293b">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
   <style>
     :root {
-      --bg: #0f172a;
+      --bg: #0b1120;
       --card-bg: #1e293b;
+      --card-header: #334155;
       --primary: #3b82f6;
       --primary-hover: #2563eb;
       --text: #f8fafc;
@@ -15,233 +19,570 @@
       --border: #334155;
       --danger: #ef4444;
       --success: #10b981;
+      --warning: #f59e0b;
+      --caution-bg: rgba(245, 158, 11, 0.15);
+      --bubble-user: #1e3a8a;
+      --bubble-assistant: #1e293b;
     }
+
+    body.high-contrast {
+      --bg: #000000;
+      --card-bg: #121212;
+      --card-header: #262626;
+      --primary: #60a5fa;
+      --text: #ffffff;
+      --text-dim: #d1d5db;
+      --border: #ffffff;
+      --bubble-user: #003366;
+      --bubble-assistant: #1c1c1c;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
       padding: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       min-height: 100vh;
+      overflow-x: hidden;
     }
-    .container {
+
+    .app-wrapper {
       width: 100%;
-      max-width: 600px;
-      background: var(--card-bg);
-      border-radius: 12px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-      padding: 24px;
-      box-sizing: border-box;
-      border: 1px solid var(--border);
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 12px;
     }
-    h1 {
-      font-size: 1.5rem;
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: var(--text);
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+    }
+
+    .brand h1 {
+      font-size: 1.25rem;
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand span {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      display: block;
+    }
+
+    .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .subtitle {
-      font-size: 0.875rem;
-      color: var(--text-dim);
-      margin-bottom: 20px;
-    }
+
     .status-badge {
-      display: inline-block;
       padding: 4px 10px;
       border-radius: 9999px;
       font-size: 0.75rem;
       font-weight: 600;
       background: var(--border);
       color: var(--text-dim);
-      margin-bottom: 16px;
+      transition: all 0.2s;
     }
-    .status-badge.active {
-      background: #1e3a8a;
-      color: #93c5fd;
-    }
-    .status-badge.muted {
-      background: #7f1d1d;
-      color: #fca5a5;
-    }
-    .box {
-      background: rgba(15, 23, 42, 0.6);
+    .status-badge.active { background: #1e3a8a; color: #93c5fd; }
+    .status-badge.muted { background: #7f1d1d; color: #fca5a5; }
+
+    .btn-icon {
+      background: transparent;
       border: 1px solid var(--border);
+      color: var(--text);
       border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 16px;
-      min-height: 48px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
     }
-    .box-title {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      margin-bottom: 6px;
-    }
-    .box-content {
-      font-size: 1rem;
-      line-height: 1.4;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .controls {
+    .btn-icon:hover { background: var(--card-header); }
+
+    /* Messages Stream Container */
+    #chatStream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 4px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      align-items: center;
-      margin-top: 20px;
+      gap: 14px;
+      scroll-behavior: smooth;
     }
-    .text-form {
+
+    .msg-group {
       display: flex;
-      width: 100%;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 90%;
+    }
+    .msg-group.user { align-self: flex-end; }
+    .msg-group.assistant { align-self: flex-start; }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      word-break: break-word;
+      dir: auto;
+    }
+    .msg-group.user .bubble {
+      background: var(--bubble-user);
+      color: #fff;
+      border-bottom-right-radius: 2px;
+    }
+    .msg-group.assistant .bubble {
+      background: var(--bubble-assistant);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 2px;
+    }
+
+    /* Lesson Card (Teach, don't just do) */
+    .lesson-card {
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid #3b82f6;
+      border-left: 4px solid #3b82f6;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 6px;
+    }
+    .lesson-title {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: #93c5fd;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .lesson-summary {
+      font-size: 0.875rem;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .lesson-tip {
+      font-size: 0.8rem;
+      color: var(--warning);
+      background: rgba(245, 158, 11, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+    .lesson-link {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .lesson-link:hover { text-decoration: underline; }
+
+    /* Source Cards Container */
+    .sources-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .source-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+    }
+    .source-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .source-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .badge-safe { background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    .badge-caution { background: var(--caution-bg); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    .source-desc { color: var(--text-dim); margin-bottom: 4px; }
+    .source-safety { color: #f59e0b; font-size: 0.75rem; }
+
+    /* Action Proposal Box */
+    .proposal-card {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--danger);
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 8px;
+    }
+    .proposal-title {
+      font-weight: 700;
+      color: #fca5a5;
+      font-size: 0.9rem;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .proposal-body { font-size: 0.875rem; margin-bottom: 12px; }
+    .proposal-actions { display: flex; gap: 8px; }
+    .btn-approve {
+      flex: 1;
+      height: 42px;
+      border: none;
+      background: var(--success);
+      color: white;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-approve:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-cancel {
+      padding: 0 16px;
+      height: 42px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    /* Controls Bottom Area */
+    .footer-controls {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .text-row {
+      display: flex;
       gap: 8px;
     }
     input#textInput {
       flex: 1;
-      height: 46px;
-      background: rgba(15, 23, 42, 0.6);
+      height: 48px;
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text);
       padding: 0 14px;
       font-size: 0.95rem;
       outline: none;
-      box-sizing: border-box;
+      dir: auto;
     }
-    input#textInput:focus {
-      border-color: var(--primary);
-    }
-    button#sendBtn {
-      height: 46px;
-      padding: 0 20px;
-      border-radius: 8px;
-      border: none;
-      background: var(--primary);
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    button#sendBtn:hover {
-      background: var(--primary-hover);
-    }
-    .divider {
-      display: flex;
-      align-items: center;
-      width: 100%;
-      color: var(--text-dim);
-      font-size: 0.75rem;
-      margin: 2px 0;
-    }
-    .divider::before, .divider::after {
-      content: "";
-      flex: 1;
-      border-bottom: 1px solid var(--border);
-    }
-    .divider span {
-      padding: 0 10px;
-      text-transform: uppercase;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-    }
-    button#talkBtn {
-      width: 100%;
-      height: 60px;
-      border-radius: 8px;
-      border: none;
-      background: var(--primary);
-      color: white;
-      font-size: 1.125rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      user-select: none;
-    }
-    button#talkBtn:hover {
-      background: var(--primary-hover);
-    }
-    button#talkBtn:active, button#talkBtn.recording {
-      background: var(--danger);
-      transform: scale(0.98);
-    }
-    button#approveBtn {
-      width: 100%;
+    input#textInput:focus { border-color: var(--primary); }
+
+    .btn-send {
+      width: 50px;
       height: 48px;
+      background: var(--primary);
+      border: none;
       border-radius: 8px;
-      border: 1px solid var(--success);
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
+      color: white;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    .voice-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .btn-talk {
+      flex: 1;
+      height: 52px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: white;
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .btn-talk.recording {
+      background: var(--danger);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.75; }
+      100% { opacity: 1; }
+    }
+
+    .mode-toggle {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      user-select: none;
+      padding: 0 4px;
+    }
+
+    /* Settings Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
       display: none;
-      transition: all 0.2s;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
     }
-    button#approveBtn:hover:not(:disabled) {
-      background: rgba(16, 185, 129, 0.3);
+    .modal {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 480px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
-    button#approveBtn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    .modal h2 { margin: 0; font-size: 1.15rem; display: flex; justify-content: space-between; align-items: center; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-dim); }
+    .form-group select, .form-group input[type="range"] {
+      height: 40px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0 10px;
+    }
+    .privacy-notice {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      background: rgba(15, 23, 42, 0.6);
+      padding: 10px;
+      border-radius: 6px;
+      line-height: 1.4;
+    }
+    .btn-clear {
+      height: 38px;
+      border: 1px solid var(--danger);
+      background: transparent;
+      color: #fca5a5;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>SysSathi <span>⚡</span></h1>
-    <div class="subtitle">Windows Slowness Diagnostic Assistant</div>
-    <div id="statusBadge" class="status-badge">Ready</div>
+  <div class="app-wrapper">
+    <header>
+      <div class="brand">
+        <img class="brand-icon" src="/static/icon.svg" alt="SysSathi" />
+        <div>
+          <h1>SysSathi ⚡</h1>
+          <span>Multilingual Tech Companion</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div id="statusBadge" class="status-badge" aria-live="polite">Ready</div>
+        <button id="settingsBtn" class="btn-icon" aria-label="Settings">⚙️</button>
+      </div>
+    </header>
 
-    <div class="box">
-      <div class="box-title">Transcript</div>
-      <div id="transcriptBox" class="box-content">Hold the button below or type a query...</div>
+    <div id="chatStream" role="log" aria-live="polite">
+      <div class="msg-group assistant">
+        <div class="bubble">
+          Namaste! Main SysSathi hoon. Aap mujhse bolkar ya likhkar laptop ki problem pooch sakte hain, naye software dhoond sakte hain, ya computer concepts samajh sakte hain.
+        </div>
+      </div>
     </div>
 
-    <div class="box">
-      <div class="box-title">Assistant Reply</div>
-      <div id="replyBox" class="box-content">—</div>
-    </div>
+    <!-- Active Proposal Container (Injected on demand) -->
+    <div id="activeProposalAnchor"></div>
 
-    <div id="proposalContainer" class="box" style="display: none;">
-      <div class="box-title">Pending Action Proposal</div>
-      <div id="proposalBox" class="box-content">—</div>
-    </div>
-
-    <div class="controls">
-      <form id="textForm" class="text-form" onsubmit="sendText(event)">
-        <input id="textInput" type="text" placeholder="Type a message (e.g. laptop slow hai, battery report do)..." autocomplete="off" />
-        <button type="submit" id="sendBtn">Send</button>
+    <div class="footer-controls">
+      <form id="textForm" class="text-row" onsubmit="sendText(event)">
+        <input id="textInput" type="text" placeholder="Type a message (e.g. laptop slow kyun hai, free photo editor, wifi password)..." autocomplete="off" />
+        <button type="submit" class="btn-send" aria-label="Send">➤</button>
       </form>
 
-      <div class="divider"><span>OR</span></div>
+      <div class="voice-row">
+        <button id="talkBtn" class="btn-talk" aria-label="Voice input">
+          <span id="micIcon">🎙️</span>
+          <span id="talkBtnText">Hold to Talk</span>
+        </button>
+        <label class="mode-toggle">
+          <input type="checkbox" id="toggleModeCheckbox" />
+          <span>Tap to Toggle</span>
+        </label>
+      </div>
+    </div>
+  </div>
 
-      <button id="talkBtn">Hold to Talk</button>
-      <button id="approveBtn" disabled>Approve Action</button>
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal">
+      <h2>
+        <span>Companion Settings</span>
+        <button id="closeSettingsBtn" class="btn-icon">✕</button>
+      </h2>
+
+      <div class="form-group">
+        <label for="languageSelect">Preferred Language (भाषा):</label>
+        <select id="languageSelect">
+          <option value="hi" selected>Hindi (हिन्दी / Hinglish)</option>
+          <option value="en">English</option>
+          <option value="bn">Bengali (বাংলা)</option>
+          <option value="ta">Tamil (தமிழ்)</option>
+          <option value="te">Telugu (తెలుగు)</option>
+          <option value="mr">Marathi (मराठी)</option>
+          <option value="gu">Gujarati (ગુજરાતી)</option>
+          <option value="kn">Kannada (ಕನ್ನಡ)</option>
+          <option value="ml">Malayalam (മലയാളം)</option>
+          <option value="pa">Punjabi (ਪੰਜਾਬੀ)</option>
+          <option value="or">Odia (ଓଡ଼ିଆ)</option>
+          <option value="ur">Urdu (اردو)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="scriptSelect">Script Preference:</label>
+        <select id="scriptSelect">
+          <option value="latin" selected>Roman / Latin (Hinglish)</option>
+          <option value="native">Native Script (Devanagari, Bengali, etc.)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="contrastToggle">Accessibility:</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer;">
+          <input type="checkbox" id="contrastToggle" />
+          <span>High Contrast Mode</span>
+        </label>
+      </div>
+
+      <div class="privacy-notice">
+        <strong>Privacy Assurance (§7.4):</strong>
+        SysSathi runs strictly locally on 127.0.0.1. Only audio and technical questions are processed by Gnani AI models. Your personal Windows file paths (C:\Users\...) and usernames are redacted locally before any API request.
+      </div>
+
+      <button id="clearChatBtn" class="btn-clear">Clear Conversation History</button>
     </div>
   </div>
 
   <script>
-    const talkBtn = document.getElementById("talkBtn");
-    const approveBtn = document.getElementById("approveBtn");
-    const statusBadge = document.getElementById("statusBadge");
-    const transcriptBox = document.getElementById("transcriptBox");
-    const replyBox = document.getElementById("replyBox");
-    const proposalContainer = document.getElementById("proposalContainer");
-    const proposalBox = document.getElementById("proposalBox");
+    // State & Preferences
+    const prefs = {
+      lang: localStorage.getItem("syssathi_lang") || "hi",
+      script: localStorage.getItem("syssathi_script") || "latin",
+      highContrast: localStorage.getItem("syssathi_contrast") === "true",
+      tapMode: localStorage.getItem("syssathi_tapmode") === "true",
+    };
 
-    let audioContext = null;
-    let mediaStream = null;
-    let audioProcessor = null;
-    let websocket = null;
-    let isRecording = false;
-    let pcmQueue = [];
+    // DOM Elements
+    const chatStream = document.getElementById("chatStream");
+    const statusBadge = document.getElementById("statusBadge");
+    const talkBtn = document.getElementById("talkBtn");
+    const talkBtnText = document.getElementById("talkBtnText");
+    const textInput = document.getElementById("textInput");
+    const toggleModeCheckbox = document.getElementById("toggleModeCheckbox");
+    const settingsModal = document.getElementById("settingsModal");
+    const settingsBtn = document.getElementById("settingsBtn");
+    const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+    const languageSelect = document.getElementById("languageSelect");
+    const scriptSelect = document.getElementById("scriptSelect");
+    const contrastToggle = document.getElementById("contrastToggle");
+    const clearChatBtn = document.getElementById("clearChatBtn");
+    const activeProposalAnchor = document.getElementById("activeProposalAnchor");
+
+    // Initialize Preferences in UI
+    languageSelect.value = prefs.lang;
+    scriptSelect.value = prefs.script;
+    contrastToggle.checked = prefs.highContrast;
+    toggleModeCheckbox.checked = prefs.tapMode;
+    if (prefs.highContrast) document.body.classList.add("high-contrast");
+    updateTalkButtonLabel();
+
+    function updateTalkButtonLabel() {
+      talkBtnText.textContent = prefs.tapMode ? "Tap to Talk" : "Hold to Talk";
+    }
+
+    // Modal controls
+    settingsBtn.addEventListener("click", () => settingsModal.style.display = "flex");
+    closeSettingsBtn.addEventListener("click", () => settingsModal.style.display = "none");
+    settingsModal.addEventListener("click", (e) => {
+      if (e.target === settingsModal) settingsModal.style.display = "none";
+    });
+
+    languageSelect.addEventListener("change", (e) => {
+      prefs.lang = e.target.value;
+      localStorage.setItem("syssathi_lang", prefs.lang);
+      notifySettingsChange();
+    });
+
+    scriptSelect.addEventListener("change", (e) => {
+      prefs.script = e.target.value;
+      localStorage.setItem("syssathi_script", prefs.script);
+      notifySettingsChange();
+    });
+
+    contrastToggle.addEventListener("change", (e) => {
+      prefs.highContrast = e.target.checked;
+      localStorage.setItem("syssathi_contrast", prefs.highContrast);
+      document.body.classList.toggle("high-contrast", prefs.highContrast);
+    });
+
+    toggleModeCheckbox.addEventListener("change", (e) => {
+      prefs.tapMode = e.target.checked;
+      localStorage.setItem("syssathi_tapmode", prefs.tapMode);
+      updateTalkButtonLabel();
+    });
+
+    clearChatBtn.addEventListener("click", () => {
+      chatStream.innerHTML = "";
+      appendMessage("assistant", "Chat history cleared. How can I help you?");
+      settingsModal.style.display = "none";
+    });
 
     function setStatus(text, type = "normal") {
       statusBadge.textContent = text;
@@ -250,7 +591,143 @@
       if (type === "muted") statusBadge.classList.add("muted");
     }
 
-    // Audio Playback
+    // Chat Message Rendering
+    function appendMessage(role, text) {
+      const group = document.createElement("div");
+      group.className = `msg-group ${role}`;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      group.appendChild(bubble);
+      chatStream.appendChild(group);
+      chatStream.scrollTop = chatStream.scrollHeight;
+      return bubble;
+    }
+
+    function appendLessonCard(card) {
+      const cardEl = document.createElement("div");
+      cardEl.className = "lesson-card";
+      cardEl.innerHTML = `
+        <div class="lesson-title">💡 ${escapeHtml(card.title)}</div>
+        <div class="lesson-summary">${escapeHtml(card.summary)}</div>
+        ${card.actionable_tip ? `<div class="lesson-tip">Tip: ${escapeHtml(card.actionable_tip)}</div>` : ""}
+        ${card.external_link ? `<a class="lesson-link" href="${escapeHtml(card.external_link)}" target="_blank" rel="noopener">Learn more ↗</a>` : ""}
+      `;
+      chatStream.appendChild(cardEl);
+      chatStream.scrollTop = chatStream.scrollHeight;
+    }
+
+    function appendSourcesCard(sources) {
+      const container = document.createElement("div");
+      container.className = "sources-container";
+
+      const list = sources.recommendations || sources.results || sources.sources || [];
+      list.forEach((s) => {
+        const isCaution = s.risk_level === "caution" || s.risk_level === "high_risk";
+        const badgeClass = isCaution ? "badge-caution" : "badge-safe";
+        const badgeText = isCaution ? "Caution (Legal Context)" : "Verified Safe";
+        const tip = s.download_safety_tips ? s.download_safety_tips[0] : "";
+
+        const card = document.createElement("div");
+        card.className = "source-card";
+        card.innerHTML = `
+          <div class="source-card-header">
+            <span class="source-name">${escapeHtml(s.name || s.title)}</span>
+            <span class="${badgeClass}">${badgeText}</span>
+          </div>
+          <div class="source-desc">${escapeHtml(s.why_recommended || s.summary || "")}</div>
+          ${tip ? `<div class="source-safety">🛡️ ${escapeHtml(tip)}</div>` : ""}
+          ${s.url ? `<a class="lesson-link" href="${escapeHtml(s.url)}" target="_blank" rel="noopener">Official Link ↗</a>` : ""}
+        `;
+        container.appendChild(card);
+      });
+
+      chatStream.appendChild(container);
+      chatStream.scrollTop = chatStream.scrollHeight;
+    }
+
+    function renderProposal(proposalData, description) {
+      activeProposalAnchor.innerHTML = "";
+      const propEl = document.createElement("div");
+      propEl.className = "proposal-card";
+      propEl.innerHTML = `
+        <div class="proposal-title">⚠️ Action Required: Process Close Proposal</div>
+        <div class="proposal-body">${escapeHtml(description)}</div>
+        <div class="proposal-actions">
+          <button id="approveBtn" class="btn-approve">Approve (60s)</button>
+          <button id="cancelBtn" class="btn-cancel">Cancel</button>
+        </div>
+      `;
+      activeProposalAnchor.appendChild(propEl);
+
+      const approveBtn = propEl.querySelector("#approveBtn");
+      const cancelBtn = propEl.querySelector("#cancelBtn");
+
+      let remaining = 60;
+      const interval = setInterval(() => {
+        remaining -= 1;
+        if (remaining > 0) {
+          approveBtn.textContent = `Approve (${remaining}s)`;
+        } else {
+          clearInterval(interval);
+          approveBtn.disabled = true;
+          approveBtn.textContent = "Expired";
+          setStatus("Proposal expired");
+        }
+      }, 1000);
+
+      cancelBtn.onclick = () => {
+        clearInterval(interval);
+        activeProposalAnchor.innerHTML = "";
+        setStatus("Proposal cancelled");
+      };
+
+      approveBtn.onclick = async () => {
+        clearInterval(interval);
+        approveBtn.disabled = true;
+        setStatus("Executing approval...");
+        const nonceMeta = document.querySelector('meta[name="syssathi-nonce"]');
+        const nonce = nonceMeta ? nonceMeta.content : "";
+
+        try {
+          const resp = await fetch("/api/approve", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-SysSathi-Nonce": nonce,
+            },
+          });
+          const data = await resp.json();
+          activeProposalAnchor.innerHTML = "";
+          if (resp.ok && data.success) {
+            appendMessage("assistant", data.spoken_reply);
+            setStatus("Action Complete");
+            if (data.audio_base64) {
+              const binary = atob(data.audio_base64);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              playAudioChunk(bytes.buffer);
+            }
+          } else {
+            appendMessage("assistant", data.spoken_reply || "Approval execution failed.");
+            setStatus("Action Failed");
+          }
+        } catch (err) {
+          console.error("Approve error:", err);
+          setStatus("Network Error");
+        }
+      };
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str).replace(/[&<>"']/g, (m) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+      })[m]);
+    }
+
+    // Audio Playback Pipeline
+    let audioContext = null;
     let audioQueue = [];
     let isPlaying = false;
 
@@ -282,7 +759,10 @@
       }
     }
 
-    // Open/reconnect talk websocket with standard handlers
+    // WebSocket Management
+    let websocket = null;
+    let currentAssistantBubble = null;
+
     function openTalkSocket() {
       if (websocket && (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING)) {
         try { websocket.close(); } catch (_) {}
@@ -295,33 +775,65 @@
         if (typeof event.data === "string") {
           const data = JSON.parse(event.data);
           if (data.type === "transcript") {
-            transcriptBox.textContent = data.text;
+            // Already appended or updated
           } else if (data.type === "reply") {
-            replyBox.textContent = data.text;
+            if (currentAssistantBubble) {
+              currentAssistantBubble.textContent = data.text;
+            } else {
+              currentAssistantBubble = appendMessage("assistant", data.text);
+            }
+          } else if (data.type === "sources") {
+            appendSourcesCard(data.data);
+          } else if (data.type === "lesson_card") {
+            appendLessonCard(data.data);
           } else if (data.type === "proposal") {
-            proposalContainer.style.display = "block";
-            proposalBox.textContent = data.description;
-            approveBtn.style.display = "block";
-            approveBtn.disabled = false;
-            // Addendum A5: 60-second proposal expiry timer
-            setTimeout(() => {
-              if (!approveBtn.disabled) {
-                approveBtn.disabled = true;
-                setStatus("Proposal expired");
-              }
-            }, 60000);
+            renderProposal(data.data, data.description);
           } else if (data.type === "status") {
             setStatus(data.text);
           }
         } else {
-          // Binary audio chunk from TTS
           playAudioChunk(event.data);
         }
       };
       return websocket;
     }
 
-    // Initialize microphone hardware and keep warm
+    function notifySettingsChange() {
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(JSON.stringify({
+          type: "settings",
+          language: prefs.lang,
+          script: prefs.script,
+        }));
+      }
+    }
+
+    // Audio Capture & Downsampling (16kHz PCM16 per W9)
+    let mediaStream = null;
+    let audioProcessor = null;
+    let isRecording = false;
+    let pcmQueue = [];
+
+    function downsampleTo16k(inputBuffer, inputSampleRate) {
+      if (inputSampleRate === 16000) {
+        const pcm16 = new Int16Array(inputBuffer.length);
+        for (let i = 0; i < inputBuffer.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputBuffer[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return pcm16;
+      }
+      const ratio = inputSampleRate / 16000;
+      const newLength = Math.round(inputBuffer.length / ratio);
+      const pcm16 = new Int16Array(newLength);
+      for (let i = 0; i < newLength; i++) {
+        const origIndex = Math.min(Math.floor(i * ratio), inputBuffer.length - 1);
+        const s = Math.max(-1, Math.min(1, inputBuffer[origIndex]));
+        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return pcm16;
+    }
+
     async function initAudio() {
       if (mediaStream && audioContext && audioProcessor) return true;
       try {
@@ -330,7 +842,6 @@
         });
         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         const source = audioContext.createMediaStreamSource(mediaStream);
-
         const bufferSize = 2048;
         audioProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
         source.connect(audioProcessor);
@@ -339,15 +850,9 @@
         audioProcessor.onaudioprocess = (e) => {
           if (!isRecording) return;
           const inputData = e.inputBuffer.getChannelData(0);
-          const pcm16 = new Int16Array(inputData.length);
-          for (let i = 0; i < inputData.length; i++) {
-            const s = Math.max(-1, Math.min(1, inputData[i]));
-            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          }
+          const pcm16 = downsampleTo16k(inputData, audioContext.sampleRate);
           if (websocket && websocket.readyState === WebSocket.OPEN) {
-            while (pcmQueue.length > 0) {
-              websocket.send(pcmQueue.shift());
-            }
+            while (pcmQueue.length > 0) websocket.send(pcmQueue.shift());
             websocket.send(pcm16.buffer);
           } else {
             pcmQueue.push(pcm16.buffer);
@@ -355,48 +860,27 @@
         };
         return true;
       } catch (err) {
-        console.error("Microphone access error:", err);
+        console.error("Microphone error:", err);
         setStatus("Mic Access Denied");
         return false;
       }
     }
 
-    // Direct text submission
-    function sendText(e) {
-      if (e) e.preventDefault();
-      const input = document.getElementById("textInput");
-      const text = input.value.trim();
-      if (!text) return;
-      input.value = "";
-
-      setStatus("Thinking...", "active");
-      transcriptBox.textContent = text;
-      replyBox.textContent = "Processing with Evon...";
-      proposalContainer.style.display = "none";
-
-      const ws = openTalkSocket();
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: "text", text: text }));
-      };
-    }
-
     async function startRecording() {
-      if (isPlaying) return; // Mic muted while audio plays
+      if (isPlaying) return;
       const ok = await initAudio();
       if (!ok) return;
 
       pcmQueue = [];
       isRecording = true;
       talkBtn.classList.add("recording");
-      talkBtn.textContent = "Release to Send";
+      talkBtnText.textContent = prefs.tapMode ? "Tap to Stop" : "Release to Send";
       setStatus("Listening...", "active");
-      proposalContainer.style.display = "none";
 
+      currentAssistantBubble = null;
       const ws = openTalkSocket();
       ws.onopen = () => {
-        while (pcmQueue.length > 0) {
-          ws.send(pcmQueue.shift());
-        }
+        while (pcmQueue.length > 0) ws.send(pcmQueue.shift());
       };
     }
 
@@ -404,68 +888,74 @@
       if (!isRecording) return;
       isRecording = false;
       talkBtn.classList.remove("recording");
-      talkBtn.textContent = "Hold to Talk";
+      updateTalkButtonLabel();
       setStatus("Processing with Prisma & Evon...");
 
-      // Allow final packet to flush then send EOF
       setTimeout(() => {
         if (websocket && websocket.readyState === WebSocket.OPEN) {
-          while (pcmQueue.length > 0) {
-            websocket.send(pcmQueue.shift());
-          }
-          websocket.send(JSON.stringify({ type: "eof" }));
+          while (pcmQueue.length > 0) websocket.send(pcmQueue.shift());
+          websocket.send(JSON.stringify({
+            type: "eof",
+            language: prefs.lang,
+            script: prefs.script,
+          }));
         }
       }, 100);
     }
 
-    talkBtn.addEventListener("mousedown", startRecording);
-    talkBtn.addEventListener("mouseup", stopRecording);
-    talkBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
-    talkBtn.addEventListener("touchend", (e) => { e.preventDefault(); stopRecording(); });
-
-    // Pre-request mic on first mouse hover or touch for instant responsiveness
-    talkBtn.addEventListener("mouseenter", () => { initAudio(); }, { once: true });
-
-    // Wire Approve button
-    approveBtn.addEventListener("click", async () => {
-      approveBtn.disabled = true;
-      setStatus("Approving action...");
-      const nonceMeta = document.querySelector('meta[name="syssathi-nonce"]');
-      const nonce = nonceMeta ? nonceMeta.content : "";
-
-      try {
-        const resp = await fetch("/api/approve", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-SysSathi-Nonce": nonce,
-          },
-        });
-        const data = await resp.json();
-        if (resp.ok && data.success) {
-          replyBox.textContent = data.spoken_reply;
-          setStatus("Action Complete");
-          proposalContainer.style.display = "none";
-          if (data.audio_base64) {
-            try {
-              const binary = atob(data.audio_base64);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-              playAudioChunk(bytes.buffer);
-            } catch (playErr) {
-              console.error("Failed to play approve audio:", playErr);
-            }
-          }
-        } else {
-          replyBox.textContent = data.spoken_reply || data.detail || "Approval failed";
-          setStatus("Approval Failed");
-        }
-      } catch (err) {
-        console.error("Approve request failed:", err);
-        setStatus("Network Error");
+    // Voice button interaction
+    talkBtn.addEventListener("mousedown", (e) => {
+      if (!prefs.tapMode) startRecording();
+    });
+    talkBtn.addEventListener("mouseup", (e) => {
+      if (!prefs.tapMode) stopRecording();
+    });
+    talkBtn.addEventListener("click", (e) => {
+      if (prefs.tapMode) {
+        if (isRecording) stopRecording();
+        else startRecording();
       }
     });
+
+    talkBtn.addEventListener("touchstart", (e) => {
+      if (!prefs.tapMode) { e.preventDefault(); startRecording(); }
+    });
+    talkBtn.addEventListener("touchend", (e) => {
+      if (!prefs.tapMode) { e.preventDefault(); stopRecording(); }
+    });
+
+    talkBtn.addEventListener("mouseenter", () => { initAudio(); }, { once: true });
+
+    // Text Submission
+    function sendText(e) {
+      if (e) e.preventDefault();
+      const text = textInput.value.trim();
+      if (!text) return;
+      textInput.value = "";
+
+      appendMessage("user", text);
+      currentAssistantBubble = appendMessage("assistant", "Thinking...");
+      setStatus("Thinking...", "active");
+
+      const ws = openTalkSocket();
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: "text",
+          text: text,
+          language: prefs.lang,
+          script: prefs.script,
+        }));
+      };
+    }
+
+    // Register Service Worker for PWA
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/static/sw.js").catch((err) => {
+          console.debug("PWA service worker registration skipped:", err);
+        });
+      });
+    }
   </script>
 </body>
 </html>
-

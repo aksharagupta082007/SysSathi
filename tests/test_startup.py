@@ -51,3 +51,13 @@ class TestParseStartupEntries:
         result = parse_startup_entries([], ["MyApp.exe.lnk"])
         assert result[0]["name"] == "MyApp.exe"
 
+    def test_parses_enabled_flag(self):
+        reg = [("ActiveApp", "HKCU_Run", True), ("DisabledApp", "HKLM_Run", False)]
+        folders = [("ActiveFolder.lnk", True), ("DisabledFolder.lnk", False)]
+        result = parse_startup_entries(reg, folders)
+        assert len(result) == 4
+        assert result[0]["enabled"] is True
+        assert result[1]["enabled"] is False
+        assert result[2]["enabled"] is True
+        assert result[3]["enabled"] is False
+

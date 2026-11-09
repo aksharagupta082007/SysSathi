@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from syssathi.host.config import EVON_BASE_URL, HF_TOKEN
-from syssathi.host.llm import chat
+from syssathi.host.llm import chat_sync
 from syssathi.host.mcp_client import ALLOWED_EVON_TOOLS, MCPClient
 from syssathi.host.prompts import TOOL_ROUTING_PROMPT
 
@@ -81,7 +81,7 @@ async def main() -> None:
 
         t0 = time.perf_counter()
         try:
-            chat_result = chat(messages=messages, tools=tool_schemas, backend="evon_remote")
+            chat_result = chat_sync(messages=messages, tools=tool_schemas, backend="evon_remote")
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
         except Exception as err:
             elapsed_ms = (time.perf_counter() - t0) * 1000.0

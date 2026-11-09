@@ -256,3 +256,154 @@ One section per part, appended under "Reports":
   - 0 safety violations.
   - Convergence on process inspection followed by closing target applications verified on live model.
 - Tests: 194 passed in 3.96s across full unit test suite.
+
+### Phase A: Stop the Bleeding (2026-11-09)
+
+- Built & Fixed:
+  - `src/syssathi/host/llm.py`: Migrated LLM adapter to async (`AsyncOpenAI`, `await asyncio.sleep`). Added module-level caching for clients and model IDs. Removed silent fallback to mock in Evon client; now raises typed `LLMUnavailable` (or falls back to `openai_compatible` if configured). Replaced default "mock" with requirement to specify backend in `.env` (unless in test mode). Provided `chat_sync` for synchronous tooling.
+  - `src/syssathi/host/config.py`: Lazy detection for `LLM_BACKEND` returning `"unset"` when unconfigured (defaults to `"mock"` in test environment). Added `EVON_KEEPALIVE` opt-in flag.
+  - `src/syssathi/host/orchestrator.py`: Converted LLM invocations to `await chat(...)`. Added explicit error handling returning localized message on LLM unavailability. Replaced emoji regex with `regex.compile(r"[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0E\uFE0F]+")` preserving CJK, Hangul, Devanagari, and other non-Latin scripts. Preserved parentheses in `(91%)`.
+  - `src/syssathi/host/prompts.py`: Fixed contradictory Roman-letters instruction in `REPLY_PROMPT_DEVANAGARI`.
+  - `src/syssathi/host/cli.py`: Display visible `[DEMO / MOCK MODE]` banner when using mock backend.
+  - `src/syssathi/host/mcp_client.py`: Sanitized subprocess environment to only forward minimal necessary OS and threshold variables; token secrets (`HF_TOKEN`, `GNANI_API_KEY`) are no longer leaked to MCP subprocess.
+  - `src/syssathi/mcp_server/processes.py`: Implemented two-pass CPU sampling with delay in `sample_process_table()` so `get_top_processes(sort_by="cpu")` measures true non-zero CPU. Removed hardcoded top-5 truncation in `group_process_list(..., top_n=None)`.
+  - `src/syssathi/mcp_server/server.py`: Updated `get_top_processes` to sort full process list before slicing `[:limit]`.
+  - `src/syssathi/mcp_server/actions.py`: Rewrote `_execute_close_sync` to accurately count closed, skipped, and failed processes without double counting or dead code. Added `_purge_proposals` to evict expired proposals and enforce a maximum in-memory store cap of 32.
+  - `src/syssathi/voice/prisma.py`: Added `transcribe_bytes` to allow direct in-memory WAV transcription.
+  - `src/syssathi/web/app.py`: Replaced deprecated `@app.on_event` with modern `lifespan` handler. Added Origin validation before accepting WebSocket `/ws/talk` and on `POST /api/approve`. Added per-session state isolation via `syssathi_session_id` cookie. Removed hardcoded `/tmp/syssathi_recording.wav` in favor of `io.BytesIO`. Added 1MB audio buffer limit and WebSocket disconnect handling. Removed fake-transcript fallback hack.
+  - `src/syssathi/web/confirmation.py`: Handled `"already been executed"` reason string.
+  - `src/syssathi/web/static/index.html`: Added `aria-live="polite"`, cleared stale proposal timers on new proposals, and added a live 60-second countdown in the Approve button.
+  - `tests/`: Added unit tests for CJK/parentheses preservation, CPU non-zero sampling on active child process, proposal purging, LLM failure raising `LLMUnavailable`, and WebSocket Origin rejection.
+- How to run: `& ".\.venv\Scripts\python.exe" -m pytest tests/ -v`
+- Tests: 204 passed, 0 failed in 18.26s
+- Deviations: none
+- Open questions: none
+
+### Phase B: Make the Current Product Correct (2026-11-09)
+
+- Built & Fixed:
+  - `src/syssathi/schemas.py` (`T1`, `W10`): Defined typed Pydantic models for `ProcessGroup`, `Findings`, `StartupEntry`, `StartupReport`, `BatteryReport`, `Proposal`, `RefusalCode`, `Refusal`, and `ExecutionResult`. Aligned `actions.py` and `confirmation.py` with typed refusal codes (`PROTECTED`, `NOT_RUNNING`, `NOT_IN_DIAGNOSIS`, `EXPIRED`, `REUSED`, `BAD_TOKEN`, `UNKNOWN_ID`, `PROTECTED_PID`). Fixed drifting test expectations in `test_confirmation.py` and `test_orchestrator.py`.
+  - `src/syssathi/host/validation.py` & `orchestrator.py` (`H6`, `H7`, `H8`, `H9`): Unified tool-call validation using `validate_tool_call()`. Replaced simulated user message tool returns with standard OpenAI assistant `tool_calls` + `role: "tool"` protocol. Added per-tool reply prompts with tool-specific guidance in `get_reply_prompt(style, tool_name)`. Treated unparseable tool call arguments as schema validation rejections rather than evaluating as `{}`.
+  - `src/syssathi/grounding.py` (`§4.5`): Built runtime grounding verifier with Unicode digit normalization (`unicodedata.digit` for Devanagari ०-९, Bengali, Arabic-Indic, etc.) and `format_template_reply`. Enforced runtime number verification in both fast path and Evon routing with one-shot strict regeneration and deterministic template fallback.
+  - `src/syssathi/mcp_server/sanitize.py` (`S9`): Stripped Unicode category `Cf` format characters (bidi overrides, zero-width characters) alongside C0/C1 control characters to prevent prompt injection and terminal display anomalies.
+  - `src/syssathi/mcp_server/actions.py` (`S5`, `S6`): Enforced that `propose_close` targets must appear in the latest diagnosis or in the curated `CURATED_SAFE_CLOSABLE` allowlist; otherwise rejected with `RefusalCode.NOT_IN_DIAGNOSIS`. Re-checked protected PIDs at execution time.
+  - `src/syssathi/mcp_server/audit.py` (`S12`): Added 5MB file-size rotation (`audit.1.jsonl`), supported optional `session_id` and `actor` (`ui-click`, `cli`, `evon-auto`), and respected `SYSSATHI_LOG_DIR` environment override.
+  - `src/syssathi/mcp_server/server.py` & `__main__.py` (`S11`, `C4`): Moved `logging.basicConfig` out of module import time into `main()`. Added `__main__.py` entrypoint and registered `syssathi-mcp` console script in `pyproject.toml`.
+  - `src/syssathi/host/mcp_client.py` (`C2`, `C3`, `C4`): Checked `result.isError` raising typed `ToolError`. Wrapped calls in timeouts (10s for diagnose, 5s for others). Added `check_health()` and auto-restart when subprocess becomes unresponsive.
+  - `src/syssathi/mcp_server/battery.py` (`S7`): Cleaned up PowerShell invocation. Added automatic fallback to `powercfg.exe /batteryreport /xml /output <tmp>` on Windows when WMI lacks administrator privileges. Normalized units with explicit `"unit": "mWh"`.
+  - `src/syssathi/mcp_server/startup.py` (`S8`): Inspected Windows `StartupApproved\Run` and `StartupFolder` registry keys to identify disabled applications. Checked `WOW6432Node` run keys. Only counted truly enabled startup apps. Parsed `.desktop` keys on Linux.
+  - `src/syssathi/mcp_server/diagnose.py` (`S10`): Added `window_s` timing and `swap_used_pct` swap memory metrics to diagnostic findings.
+  - `src/syssathi/host/config.py` & `timing.py` (`H12`, `H13`, `H14`, `H15`): Refactored configuration with cached `pydantic-settings` `Settings` loaded lazily via `get_settings()`. Renamed fast-path flag to `ENABLE_FAST_PATH` with backward-compatible `FORCE_FAST_PATH` alias. Resolved log directories via `platformdirs` and checked `.env` across CWD, repo root, and user config dir. Added `with timer.span(name):` context manager in `Timer`.
+  - `src/syssathi/voice/` (`V1`, `V2`, `V3`, `V4`, `V5`, `W8`): Added typed `SpeechError`. Supported `language_code` in `PrismaClient` and streaming over WSS. Reused persistent keep-alive `httpx.AsyncClient` in `TimbreClient`. Extended sentence boundaries in `splitter.py` for Unicode punctuation (`。？！؟۔`). Implemented disk caching for pre-synthesized fillers (`timbre.synthesize_filler_cached`).
+  - `src/syssathi/host/orchestrator.py` & `web/app.py` (`4.2`, `W1`, `W7`, `W9`, `W14`, `H18`): Converted `Orchestrator` to stream turn events via `async def run_turn(session, user_input) -> AsyncIterator[Event]` (`route`, `filler`, `tool_call`, `tool_result`, `proposal`, `sentence`, `reply`, `done`). Connected web WebSocket directly to `run_turn`, streaming sentence-level TTS to the browser. Added `/api/health` endpoint. Added browser client-side linear resampling to 16kHz in `index.html`. Added `/help`, `/status`, and `/lang` commands with non-blocking async input in CLI.
+  - `src/syssathi/eval/` (`T3`, `T5`): Moved multi-step evaluation harness into `src/syssathi/eval/multistep.py` cleanly decoupled from test files. Added `.gitattributes` enforcing consistent LF line endings.
+- How to run:
+  - Tests: `& ".\.venv\Scripts\python.exe" -m pytest tests/ -v`
+  - Smoke: `& ".\.venv\Scripts\python.exe" scripts/mcp_smoke.py`
+  - CLI: `& ".\.venv\Scripts\python.exe" -m syssathi.host.cli`
+  - Web: `& ".\.venv\Scripts\python.exe" -m uvicorn syssathi.web.app:app --host 127.0.0.1 --port 8000`
+- Tests: 212 passed, 0 failed in 16.10s
+- Deviations: none
+- Open questions: none
+
+### Phase C: Re-Architect for Multilingual Companion & Skills (2026-11-09)
+
+- Built & Fixed:
+  - `src/syssathi/skills/` (`§5.1`, `§5.2`): Established `BaseSkill`, `LessonCard`, and `SkillResult` abstractions adhering to Principle 1 ("Teach, don't just do"). Migrated slowness and hardware inspection into `DiagnoseSkill` (Skill #1) complete with educational lesson cards explaining RAM (desk space analogy), CPU (engine analogy), and startup applications with actionable Task Manager shortcuts (`Ctrl + Shift + Esc`). Created skill contracts for `ExplainSkill`, `ToolFinderSkill`, `HowToSkill`, and `ErrorExplainerSkill` with dynamic skill resolution via `resolve_skill()`.
+  - `src/syssathi/core/languages.yaml` & `languages.py` (`§5.3`): Created complete language registry cataloging all 12 Gnani Vachana supported languages (Hindi, English, Bengali, Tamil, Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, Odia, Urdu) with script metadata, default voices, sentence delimiters, and Unicode ranges. Implemented zero-dependency, deterministic Unicode block script detector `detect_language()`.
+  - `src/syssathi/host/router.py` (`§5.2`): Upgraded slowness router and added `classify_intent()` spanning diagnose, battery, startup, processes, errors, howto, toolfinder, and explain. Replaced ASCII-biased `\w` regex with `regex.sub(r"[\p{P}\p{S}]+", " ", text)` preserving Unicode vowel signs / combining marks (`\p{M}`) across Devanagari, Bengali, Tamil, Telugu, and other Indic scripts.
+  - `src/syssathi/core/i18n.py` (`§5.3`): Built multi-language message catalogs (`t()`) covering greetings, filler phrases, status messages, and error notifications across English, Hindi (Devanagari & Latin), Bengali, Tamil, and Telugu.
+  - `src/syssathi/core/wsl.py` & `docs/WINDOWS_DEV.md` (`Decision 1`, `§7`): Built WSL environment detector (`is_wsl()`, `get_environment_info()`). Surfaced environment status in `/api/health` and injected a prominent warning banner when running in a WSL VM. Documented native Windows 11 PowerShell setup, virtual environment activation, and native system tool execution.
+  - `tests/test_skills_and_languages.py`: Added 13 unit tests verifying 12-language registry loading, native script detection across Indic languages, multilingual slowness routing, intent classification, lesson card generation, i18n catalogs, and WSL environment detection.
+- How to run:
+  - Tests: `& ".\.venv\Scripts\python.exe" -m pytest tests/ -v`
+  - Smoke: `& ".\.venv\Scripts\python.exe" scripts/mcp_smoke.py`
+  - CLI: `& ".\.venv\Scripts\python.exe" -m syssathi.host.cli`
+  - Web: `& ".\.venv\Scripts\python.exe" -m uvicorn syssathi.web.app:app --host 127.0.0.1 --port 8000`
+- Tests: 225 passed, 0 failed in 34.00s
+- Deviations: none
+- Open questions: none
+
+### Phase D: Knowledge Sources (incl. FMHY) & Citations (2026-11-09)
+
+- Built & Fixed:
+  - `src/syssathi/knowledge/sources.yaml` & `sources.py` (`§6.1`): Created source registry with verified open licenses (`is_permissive_or_open()`) for `fmhy` (CC0-1.0), `wikipedia` (CC-BY-SA-4.0), `ms_learn` (Open-Documentation), and `eff_ssd` (CC-BY-3.0).
+  - `src/syssathi/knowledge/models.py` (`§6.2`): Typed models for `RiskLevel`, `KnowledgeChunk`, `ToolRecommendation`, and `Citation`.
+  - `src/syssathi/knowledge/labeling.py` (`Decision 3`, `§6.3`): Context labeling pipeline strictly adhering to "Educate, don't block". Nothing is filtered or hidden; every entry is attached with risk levels, transparent context notes, neutral legal notes (e.g. copyright and swarm peer IP sharing for P2P/torrents), and actionable download safety tips (official domains, hash verification, Windows Defender scans).
+  - `src/syssathi/knowledge/seeds.py` & `index.py` (`§6.2`): SQLite database with FTS5 virtual table (`chunks_fts`) supporting BM25 ranking and prefix matching for sub-millisecond local offline search. Curated seeds across photo editing (Photopea, GIMP, Paint.NET, Krita), video/audio (DaVinci Resolve, HandBrake, Audacity, VLC), office & PDF (LibreOffice, PDFgear), system utilities (7-Zip, WizTree, BleachBit, Rufus), privacy/security (uBlock Origin, Bitwarden, Proton VPN, Quad9), P2P/torrents (qBittorrent with safety context), concepts (RAM, CPU, SSD vs HDD, VPN, DNS, Cache, Cookie, Firewall, Malware), Windows error codes (0x80070005, 0x80240020, 0xc000021a), and common how-tos (WiFi password, screenshot, free disk space).
+  - `src/syssathi/mcp_server/knowledge.py` & `server.py` (`§6.4`): Implemented and registered 3 read-only MCP knowledge tools (`search_sources`, `get_tool_recommendations`, `explain_term`). Updated `ALLOWED_EVON_TOOLS` and timeouts in `src/syssathi/host/mcp_client.py`.
+  - `src/syssathi/grounding.py` & `host/orchestrator.py` (`§4.5`, `§6.4`): Extended runtime grounding from numbers to full citation verification (`extract_urls_from_text`, `collect_allowed_urls`, `verify_reply_citations`). Replies citing ungrounded/hallucinated URLs are detected and rejected, triggering strict regeneration or deterministic template fallback. Emitted `sources` and `lesson_card` turn events in `Orchestrator`.
+  - `src/syssathi/skills/` (`§5.1`, `§5.2`): Connected `ExplainSkill`, `ToolFinderSkill`, `HowToSkill`, and `ErrorExplainerSkill` with knowledge tools, deterministic fallbacks, and educational `LessonCard` generation (Principle 1: "Teach, don't just do").
+  - `src/syssathi/knowledge/ingest.py` (`§6.2`): Markdown source parser extracting link entries, category hierarchies, and tags, plus signed index artifact manifest generation with SHA-256 checksums (`compute_index_manifest`).
+  - `tests/test_knowledge.py`: Added 26 unit tests covering source registry, license verification, context labeling, FTS5 search, tool recommendations, term explanations, MCP knowledge tools, citation grounding, and lesson card generation.
+- How to run:
+  - Tests: `& ".\.venv\Scripts\python.exe" -m pytest tests/ -v`
+  - Smoke: `& ".\.venv\Scripts\python.exe" scripts/mcp_smoke.py`
+  - CLI: `& ".\.venv\Scripts\python.exe" -m syssathi.host.cli`
+  - Web: `& ".\.venv\Scripts\python.exe" -m uvicorn syssathi.web.app:app --host 127.0.0.1 --port 8000`
+- Tests: 251 passed, 0 failed in 17.44s
+- Deviations: none
+- Open questions: none
+
+### Phase E: Product, UI, Packaging & Documentation (2026-11-09)
+
+- Built & Fixed:
+  - `src/syssathi/web/static/` (`§7.1`): Rewrote the Web PWA companion frontend (`index.html`, `manifest.json`, `icon.svg`, `sw.js`). Includes:
+    - Persistent language (12 Indic languages + English) and script (Latin / Native) selector.
+    - Hold-to-Talk and Tap-to-Toggle voice interaction modes.
+    - Dynamic conversational stream with interactive **Source Cards** (name, verification badges, download safety tips, official links) and **Lesson Cards** (Principle 1: "Teach, don't just do").
+    - Action proposal card with 60-second countdown timer, explicit Approve/Cancel buttons, and voice-only cancellation constraint.
+    - High-contrast accessibility mode, `dir="auto"` support, and privacy settings panel.
+  - `src/syssathi/core/privacy.py` (`§7.4`): Built privacy redaction engine (`redact_paths_and_users()`, `sanitize_payload_for_telemetry_or_api()`). Automatically redacts Windows user directories (`C:\Users\<user>\...`) and usernames before queries leave the machine to external AI APIs.
+  - `src/syssathi/web/app.py` (`§7.1`): Mounted `/static` assets, forwarded `sources`, `lesson_card`, and live tool status events over WebSocket, supported dynamic language/script session updates, and integrated privacy redaction.
+  - `src/syssathi/host/cli.py` (`§7.2`): Expanded CLI with rich subcommands:
+    - `syssathi chat`: Interactive multilingual conversational companion.
+    - `syssathi diagnose`: Real-time hardware diagnostics (CPU, RAM, Disk, Battery, Startup).
+    - `syssathi ask "<question>"`: One-shot grounded query with citations and lesson cards.
+    - `syssathi eval`: Multi-step evaluation harness runner.
+    - `syssathi index status`: Knowledge base integrity check and SHA-256 signature verifier.
+  - `pyproject.toml` (`§7.3`): Registered console scripts for `syssathi = "syssathi.host.cli:main"` and `syssathi-mcp = "syssathi.mcp_server.server:main"`. Installed and verified in editable mode.
+  - `scripts/windows_launcher.py` & `scripts/run_syssathi.bat` (`§7.3`): Windows-native desktop launcher script binding to `127.0.0.1:8000`, checking environment and WSL status, and opening default browser.
+  - Documentation Suite (`§7.5`):
+    - `README.md`: Modern overview, quickstart, principles, CLI subcommands, privacy guarantee, and testing instructions.
+    - `docs/ARCHITECTURE.md`: Complete system architecture, component breakdown, mermaid diagrams, security lifecycle, and speech pipeline.
+    - `docs/SAFETY.md`: Action authorization lifecycle (proposals, 60s timeout, single-use action IDs), protected process policies, source curation principles (Educate, don't block), and anti-injection sanitization.
+    - `docs/CONTRIBUTING.md`: Development setup guide, adding languages, adding sources, creating skills, and quality standards.
+  - `tests/test_cli_and_privacy.py`: Added 11 unit tests covering privacy path redaction, recursive payload scrubbing, CLI subcommands execution, and PWA assets.
+- How to run:
+  - Tests: `& ".\.venv\Scripts\python.exe" -m pytest tests/ -v`
+  - Launcher: `& ".\.venv\Scripts\python.exe" scripts/windows_launcher.py`
+  - CLI: `syssathi chat` or `syssathi diagnose` or `syssathi ask "photo edit"`
+  - Web: `& ".\.venv\Scripts\python.exe" -m uvicorn syssathi.web.app:app --host 127.0.0.1 --port 8000`
+- Tests: 262 passed, 0 failed in 19.59s
+- Deviations: none
+- Open questions: none
+
+### Phase F: Quality, Evaluation, CI & Operations (2026-11-09)
+
+- Built & Fixed:
+  - `tests/scenarios.jsonl` & `src/syssathi/eval/multistep.py` (`§8`): Expanded multi-step evaluation scenarios from 22 to 34 test cases spanning:
+    - Multilingual diagnostics across Hindi (Devanagari), Bengali, Tamil, and Telugu.
+    - Curated knowledge inquiries (photo editing, Wi-Fi recovery, RAM concepts, VPN selection, Windows update error `0x80070005`, and P2P/torrent safety).
+    - Hardened safety evaluations (refusal of system/protected processes, process injection defense).
+    - Updated `simulate_tool_execution` and judge heuristics to evaluate knowledge tools and safety constraints. Integrated with `syssathi eval` CLI subcommand.
+  - `src/syssathi/core/telemetry.py` (`§8`): Built local-only, opt-in operational performance dashboard (`timings.jsonl`).
+    - Disabled by default (`ENABLE_TELEMETRY=false`), zero user queries or speech recorded.
+    - Tracks p50 and p95 latencies for filler acknowledgment (< 1.5s SLA) and first synthesized sentence (< 4.0s SLA), tool frequency breakdown, and 100% citation/number grounding rate.
+    - Integrated with `syssathi telemetry` CLI subcommand for instant terminal reporting.
+  - `src/syssathi/core/privacy.py` & `src/syssathi/mcp_server/audit.py` (`§8`): Implemented `scrub_secrets()` regex scrubbing engine. Integrated into `audit.log_event()` ensuring API keys, tokens (`gnani_...`, `hf_...`, `sk-...`), and bearer headers are purged before records are written to disk.
+  - `.github/workflows/ci.yml` (`§8`): Created cross-platform GitHub Actions CI matrix running across `windows-latest`, `ubuntu-latest`, and `macos-latest` on Python 3.11 and 3.12 with automated dependency installation and pytest test runs.
+  - Test Suite (`tests/test_telemetry.py`, `tests/test_audit.py`, `tests/test_cli_and_privacy.py`, `tests/test_eval_sim.py`): Added unit tests for telemetry opt-in defaults, percentile calculations, dashboard formatting, secret scrubbing in audit logs, and knowledge/safety evaluation simulation.
+- How to run:
+  - Tests: `& ".\.venv\Scripts\python.exe" -m pytest tests/ -v`
+  - Eval Suite: `& ".\.venv\Scripts\python.exe" -m syssathi.host.cli eval`
+  - Telemetry Dashboard: `& ".\.venv\Scripts\python.exe" -m syssathi.host.cli telemetry`
+  - Smoke: `& ".\.venv\Scripts\python.exe" scripts/mcp_smoke.py`
+  - Web: `& ".\.venv\Scripts\python.exe" -m uvicorn syssathi.web.app:app --host 127.0.0.1 --port 8000`
+- Tests: 273 passed, 0 failed in 24.80s
+- Deviations: none
+- Open questions: none
+
+
+
+

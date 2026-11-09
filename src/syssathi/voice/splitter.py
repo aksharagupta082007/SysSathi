@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from typing import AsyncIterator, Iterator
 
-# End-of-sentence delimiters: Latin (. ? !), Hindi danda (।), double danda (॥)
-_SENTENCE_END_RE = re.compile(r"([.?!।॥]+(?:\s+|$))")
+# End-of-sentence delimiters: Latin (. ? !), Hindi (। ॥), CJK (。 ？ ！), Urdu/Arabic (؟ ۔)
+_SENTENCE_END_RE = re.compile(r"([.?!।॥。？！؟۔]+(?:\s+|$))")
 
 
 class SentenceSplitter:

@@ -97,10 +97,12 @@ class FakeMCPClient:
             }
         elif name == "execute_action":
             return {
-                "action_id": args.get("action_id"),
-                "closed_count": 12,
-                "skipped_count": 0,
-                "failed_count": 0,
+                "closed": 12,
+                "skipped": 0,
+                "failed": 0,
+                "fresh_diagnosis": {
+                    "ram_used_pct": 64.0,
+                },
             }
         elif name == "get_battery_report":
             return {"has_battery": True, "charge_pct": 85, "plugged": True}
@@ -175,6 +177,12 @@ class TestReplyGuard:
         assert guarded.endswith(".")
         assert "Doosra sentence" in guarded
 
+    def test_cjk_and_parentheses_survive_guard(self):
+        text = "RAM (91%) use ho rahi hai. 你的电脑内存很高。"
+        guarded = apply_reply_guard(text)
+        assert "(91%)" in guarded
+        assert "你的电脑内存很高" in guarded
+
 
 # ---------------------------------------------------------------------------
 # Test Orchestrator
@@ -213,7 +221,7 @@ class TestOrchestrator:
         orch.pending_proposal = {"action_id": "prop-456"}
         res = await orch.approve()
 
-        assert res["closed_count"] == 12
+        assert res.get("closed", res.get("closed_count")) == 12
         assert orch.pending_proposal is None
         # Verify execute_action received approval_token
         exec_call = [c for c in fake_mcp.calls if c[0] == "execute_action"][0]
@@ -263,3 +271,32 @@ class TestOrchestrator:
             await orch.handle_message(f"Hello test message {i}")
 
         assert len(orch.messages) <= 6
+
+    @pytest.mark.asyncio
+    async def test_evon_failure_returns_explicit_unavailable_reply(self):
+        """H2: Evon failure must return an explicit unavailable reply, never mock text."""
+        from syssathi.host.llm import LLMUnavailable
+        fake_mcp = FakeMCPClient()
+        orch = Orchestrator(fake_mcp)
+
+        with mock.patch("syssathi.host.orchestrator.chat", side_effect=LLMUnavailable("Evon down")):
+            reply, timer = await orch.handle_message("Mera laptop slow chal raha hai")
+
+        assert "AI service abhi uplabdh nahi hai" in reply
+
+    @pytest.mark.asyncio
+    async def test_runtime_grounding_fallback_to_template(self):
+        """§4.5: Hallucinated numbers trigger regeneration, then fall back to template."""
+        fake_mcp = FakeMCPClient()
+        orch = Orchestrator(fake_mcp)
+
+        # Chat always returns hallucinated numbers (e.g. 99.9, 777)
+        hallucinated_res = ChatResult(content="RAM 99.9% use ho rahi hai. 777 apps chal rahe hain.")
+        with mock.patch("syssathi.host.orchestrator.FORCE_FAST_PATH", True):
+            with mock.patch("syssathi.host.orchestrator.chat", return_value=hallucinated_res):
+                reply, _ = await orch.handle_message("Mera laptop slow chal raha hai")
+
+        # Must fall back to template containing valid numbers (91% from fake_mcp)
+        assert "91%" in reply or "91.2%" in reply
+        assert "99.9" not in reply
+        assert "777" not in reply

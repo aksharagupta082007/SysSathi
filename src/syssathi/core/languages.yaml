@@ -1,0 +1,171 @@
+# Gnani Vachana Supported Languages Registry
+languages:
+  hi:
+    code: hi
+    name: Hindi
+    native_name: हिन्दी
+    default_script: devanagari
+    scripts:
+      - devanagari
+      - latin
+    prisma_code: hi-IN
+    timbre_lang: hi-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!।॥"
+    digit_zero: "०"
+    unicode_range: [0x0900, 0x097F]
+
+  en:
+    code: en
+    name: English
+    native_name: English
+    default_script: latin
+    scripts:
+      - latin
+    prisma_code: en-IN
+    timbre_lang: en-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!"
+    digit_zero: "0"
+    unicode_range: [0x0020, 0x007F]
+
+  bn:
+    code: bn
+    name: Bengali
+    native_name: বাংলা
+    default_script: bengali
+    scripts:
+      - bengali
+    prisma_code: bn-IN
+    timbre_lang: bn-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!।॥"
+    digit_zero: "০"
+    unicode_range: [0x0980, 0x09FF]
+
+  ta:
+    code: ta
+    name: Tamil
+    native_name: தமிழ்
+    default_script: tamil
+    scripts:
+      - tamil
+    prisma_code: ta-IN
+    timbre_lang: ta-IN
+    default_voice: Kavitha
+    sentence_delimiters: ".?!"
+    digit_zero: "௦"
+    unicode_range: [0x0B80, 0x0BFF]
+
+  te:
+    code: te
+    name: Telugu
+    native_name: తెలుగు
+    default_script: telugu
+    scripts:
+      - telugu
+    prisma_code: te-IN
+    timbre_lang: te-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!"
+    digit_zero: "౦"
+    unicode_range: [0x0C00, 0x0C7F]
+
+  mr:
+    code: mr
+    name: Marathi
+    native_name: मराठी
+    default_script: devanagari
+    scripts:
+      - devanagari
+    prisma_code: mr-IN
+    timbre_lang: mr-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!।॥"
+    digit_zero: "०"
+    unicode_range: [0x0900, 0x097F]
+
+  gu:
+    code: gu
+    name: Gujarati
+    native_name: ગુજરાતી
+    default_script: gujarati
+    scripts:
+      - gujarati
+    prisma_code: gu-IN
+    timbre_lang: gu-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!।॥"
+    digit_zero: "૦"
+    unicode_range: [0x0A80, 0x0AFF]
+
+  kn:
+    code: kn
+    name: Kannada
+    native_name: ಕನ್ನಡ
+    default_script: kannada
+    scripts:
+      - kannada
+    prisma_code: kn-IN
+    timbre_lang: kn-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!"
+    digit_zero: "೦"
+    unicode_range: [0x0C80, 0x0CFF]
+
+  ml:
+    code: ml
+    name: Malayalam
+    native_name: മലയാളം
+    default_script: malayalam
+    scripts:
+      - malayalam
+    prisma_code: ml-IN
+    timbre_lang: ml-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!"
+    digit_zero: "൦"
+    unicode_range: [0x0D00, 0x0D7F]
+
+  pa:
+    code: pa
+    name: Punjabi
+    native_name: ਪੰਜਾਬੀ
+    default_script: gurmukhi
+    scripts:
+      - gurmukhi
+    prisma_code: pa-IN
+    timbre_lang: pa-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!।॥"
+    digit_zero: "੦"
+    unicode_range: [0x0A00, 0x0A7F]
+
+  or:
+    code: or
+    name: Odia
+    native_name: ଓଡ଼ିଆ
+    default_script: odia
+    scripts:
+      - odia
+    prisma_code: or-IN
+    timbre_lang: or-IN
+    default_voice: Shivani
+    sentence_delimiters: ".?!।॥"
+    digit_zero: "୦"
+    unicode_range: [0x0B00, 0x0B7F]
+
+  ur:
+    code: ur
+    name: Urdu
+    native_name: اردو
+    default_script: arabic
+    scripts:
+      - arabic
+    prisma_code: ur-IN
+    timbre_lang: ur-IN
+    default_voice: Shivani
+    sentence_delimiters: "؟۔.?!"
+    digit_zero: "۰"
+    unicode_range: [0x0600, 0x06FF]
+

@@ -48,6 +48,8 @@ FINDINGS_SCHEMA: dict[str, Any] = {
                 "required": ["code", "message", "severity"],
             },
         },
+        "window_s": {"type": "number"},
+        "swap_used_pct": {"type": "number"},
     },
     "required": [
         "cpu_avg_pct",
@@ -73,6 +75,8 @@ def build_findings(
     top_groups: list[dict[str, Any]],
     startup_count: int,
     thresholds: dict[str, float | int] | None = None,
+    window_s: float | None = None,
+    swap_used_pct: float | None = None,
 ) -> dict[str, Any]:
     """Build findings JSON from raw measurements (pure, no psutil)."""
     th = thresholds or get_thresholds()
@@ -107,7 +111,14 @@ def build_findings(
             "severity": "high",
         })
 
-    return {
+    # Record diagnosed process groups for S5 safe closing
+    try:
+        from syssathi.mcp_server.actions import record_seen_groups
+        record_seen_groups([g["name"] for g in top_groups if isinstance(g, dict) and "name" in g])
+    except Exception:
+        pass
+
+    result: dict[str, Any] = {
         "cpu_avg_pct": cpu_avg,
         "cpu_peak_pct": cpu_peak,
         "ram_used_pct": round(ram_used_pct, 1),
@@ -118,6 +129,12 @@ def build_findings(
         "startup_apps": startup_count,
         "findings": findings_list,
     }
+    if window_s is not None:
+        result["window_s"] = window_s
+    if swap_used_pct is not None:
+        result["swap_used_pct"] = swap_used_pct
+
+    return result
 
 
 def _sample_sync() -> dict[str, Any]:
@@ -211,6 +228,10 @@ def _sample_sync() -> dict[str, Any]:
         disk_usage = psutil.disk_usage("/")
     disk_free_pct = (disk_usage.free / disk_usage.total) * 100
 
+    # Swap metrics (S10)
+    swap = psutil.swap_memory()
+    swap_used_pct = round(swap.percent, 1)
+
     return {
         "cpu_samples": cpu_samples,
         "ram_used_pct": ram_used_pct,
@@ -218,6 +239,8 @@ def _sample_sync() -> dict[str, Any]:
         "disk_free_pct": disk_free_pct,
         "disk_mb_per_s": disk_mb_per_s,
         "top_groups": top_groups,
+        "window_s": round(window_duration, 2),
+        "swap_used_pct": swap_used_pct,
     }
 
 
@@ -243,4 +266,6 @@ async def run_diagnosis() -> dict[str, Any]:
         disk_mb_per_s=raw["disk_mb_per_s"],
         top_groups=raw["top_groups"],
         startup_count=startup_count,
+        window_s=raw.get("window_s"),
+        swap_used_pct=raw.get("swap_used_pct"),
     )

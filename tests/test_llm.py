@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from syssathi.host.llm import ChatResult, ToolCall, strip_think, chat
+from syssathi.host.llm import ChatResult, ToolCall, strip_think, chat, LLMUnavailable, LLMConfigurationError
 
 
 class TestStripThink:
@@ -117,21 +117,21 @@ _SAMPLE_FINDINGS = {
 class TestMockReply:
     """Mock backend builds a Hinglish reply from findings."""
 
-    def test_reply_under_40_words(self) -> None:
+    async def test_reply_under_40_words(self) -> None:
         messages = [
             {"role": "system", "content": "You are SysSathi."},
             {"role": "user", "content": json.dumps(_SAMPLE_FINDINGS)},
         ]
-        result = chat(messages, backend="mock")
+        result = await chat(messages, backend="mock")
         words = result.content.split()
         assert len(words) <= 40, f"Reply has {len(words)} words: {result.content}"
 
-    def test_every_number_in_reply_appears_in_findings(self) -> None:
+    async def test_every_number_in_reply_appears_in_findings(self) -> None:
         messages = [
             {"role": "system", "content": "You are SysSathi."},
             {"role": "user", "content": json.dumps(_SAMPLE_FINDINGS)},
         ]
-        result = chat(messages, backend="mock")
+        result = await chat(messages, backend="mock")
         reply_nums = _extract_numbers(result.content)
         valid_nums = _findings_numbers(_SAMPLE_FINDINGS)
         for n in reply_nums:
@@ -140,26 +140,26 @@ class TestMockReply:
                 f"Reply: {result.content!r}, Valid: {valid_nums}"
             )
 
-    def test_healthy_reply_when_no_findings(self) -> None:
+    async def test_healthy_reply_when_no_findings(self) -> None:
         findings = dict(_SAMPLE_FINDINGS, findings=[])
         messages = [
             {"role": "system", "content": "You are SysSathi."},
             {"role": "user", "content": json.dumps(findings)},
         ]
-        result = chat(messages, backend="mock")
+        result = await chat(messages, backend="mock")
         assert "theek" in result.content.lower() or "healthy" in result.content.lower()
 
-    def test_reply_is_plain_text(self) -> None:
+    async def test_reply_is_plain_text(self) -> None:
         messages = [
             {"role": "system", "content": "You are SysSathi."},
             {"role": "user", "content": json.dumps(_SAMPLE_FINDINGS)},
         ]
-        result = chat(messages, backend="mock")
+        result = await chat(messages, backend="mock")
         assert "**" not in result.content
         assert "#" not in result.content
         assert "```" not in result.content
 
-    def test_multiple_findings(self) -> None:
+    async def test_multiple_findings(self) -> None:
         findings = dict(_SAMPLE_FINDINGS, findings=[
             {"code": "RAM_HIGH", "message": "RAM above 85%", "severity": "high"},
             {"code": "CPU_HIGH", "message": "CPU above 80%", "severity": "high"},
@@ -168,7 +168,7 @@ class TestMockReply:
             {"role": "system", "content": "You are SysSathi."},
             {"role": "user", "content": json.dumps(findings)},
         ]
-        result = chat(messages, backend="mock")
+        result = await chat(messages, backend="mock")
         words = result.content.split()
         assert len(words) <= 40
 
@@ -178,40 +178,57 @@ class TestMockToolSimulation:
 
     _DUMMY_TOOLS = [{"type": "function", "function": {"name": "get_battery_report"}}]
 
-    def test_battery_keyword(self) -> None:
+    async def test_battery_keyword(self) -> None:
         messages = [{"role": "user", "content": "check my battery status"}]
-        result = chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
+        result = await chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "get_battery_report"
 
-    def test_startup_keyword(self) -> None:
+    async def test_startup_keyword(self) -> None:
         messages = [{"role": "user", "content": "show startup apps"}]
-        result = chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
+        result = await chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "list_startup_apps"
 
-    def test_ram_keyword(self) -> None:
+    async def test_ram_keyword(self) -> None:
         messages = [{"role": "user", "content": "how much ram is being used"}]
-        result = chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
+        result = await chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "get_top_processes"
         assert result.tool_calls[0].arguments["sort_by"] == "ram"
 
-    def test_band_kar_with_group(self) -> None:
+    async def test_band_kar_with_group(self) -> None:
         messages = [{"role": "user", "content": "chrome band kar do"}]
-        result = chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
+        result = await chat(messages, tools=self._DUMMY_TOOLS, backend="mock")
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "propose_close"
         assert result.tool_calls[0].arguments["group_name"] == "chrome"
 
-    def test_no_tool_without_tools_param(self) -> None:
+    async def test_no_tool_without_tools_param(self) -> None:
         """Without tools, mock returns a reply even for tool keywords."""
         messages = [{"role": "user", "content": "check my battery status"}]
-        result = chat(messages, tools=None, backend="mock")
+        result = await chat(messages, tools=None, backend="mock")
         assert len(result.tool_calls) == 0
         assert result.content  # should have a reply
 
-    def test_unknown_backend_raises(self) -> None:
+    async def test_unknown_backend_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown LLM backend"):
-            chat([{"role": "user", "content": "hi"}], backend="nonexistent")
+            await chat([{"role": "user", "content": "hi"}], backend="nonexistent")
+
+    async def test_evon_failure_raises_llm_unavailable_not_mock(self, monkeypatch) -> None:
+        """Evon failure must raise LLMUnavailable and NEVER silently fall back to mock."""
+        from unittest.mock import AsyncMock
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("503 Server Unavailable")
+        monkeypatch.setattr("syssathi.host.llm._get_evon_client", lambda: mock_client)
+        monkeypatch.setattr("syssathi.host.llm._evon_cached_model", "test-model")
+        monkeypatch.setattr("syssathi.host.config.OPENAI_COMPAT_BASE_URL", "")
+
+        with pytest.raises(LLMUnavailable):
+            await chat([{"role": "user", "content": "slow"}], backend="evon_remote")
+
+    async def test_unset_backend_raises_configuration_error(self, monkeypatch) -> None:
+        monkeypatch.setattr("syssathi.host.config.get_llm_backend", lambda: "unset")
+        with pytest.raises(LLMConfigurationError):
+            await chat([{"role": "user", "content": "hello"}], backend=None)
 

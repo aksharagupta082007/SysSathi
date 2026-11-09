@@ -17,13 +17,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from syssathi.eval.multistep import evaluate_episode, run_scenario, simulate_tool_execution
+from syssathi.grounding import verify_reply_numbers
 from syssathi.host.config import EVON_BASE_URL, HF_TOKEN
-from syssathi.host.llm import ChatResult, ToolCall, chat
+from syssathi.host.llm import ChatResult, ToolCall, chat_sync
 from syssathi.host.mcp_client import ALLOWED_EVON_TOOLS, MCPClient
 from syssathi.host.prompts import TOOL_ROUTING_PROMPT, get_reply_prompt
 from syssathi.host.validation import validate_tool_call
 from syssathi.mcp_server.policy import is_protected
-from tests.test_helpers import verify_reply_numbers
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("eval_multistep")
@@ -266,7 +267,7 @@ async def run_scenario(
     for step_num in range(max_steps):
         t0 = time.perf_counter()
         try:
-            res = chat(messages=messages, tools=tool_schemas, backend="evon_remote")
+            res = chat_sync(messages=messages, tools=tool_schemas, backend="evon_remote")
             lat_ms = (time.perf_counter() - t0) * 1000.0
             step_latencies.append(lat_ms)
         except Exception as err:

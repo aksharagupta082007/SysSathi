@@ -45,6 +45,11 @@ class TestSanitizeControlChars:
     def test_replaces_newline_with_space(self):
         assert sanitize("a\nb") == "a b"
 
+    def test_strips_unicode_cf_characters(self):
+        # U+202E (bidi override), U+200B (zero-width space)
+        assert sanitize("chr\u202eome") == "chrome"
+        assert sanitize("chr\u200bome") == "chrome"
+
 
 class TestSanitizePaths:
     def test_backslash_path(self):

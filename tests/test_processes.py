@@ -87,3 +87,29 @@ class TestAccessDeniedSkipped:
         groups = group_process_list(entries, cpu_count=1)
         assert len(groups) == 1
 
+
+class TestCpuSampling:
+    """Verify live sampling measures non-zero CPU for active processes."""
+
+    def test_get_top_processes_cpu_nonzero(self):
+        import asyncio
+        import subprocess
+        import sys
+        from syssathi.mcp_server.server import get_top_processes
+
+        # Start a short busy-loop child
+        proc = subprocess.Popen([
+            sys.executable, "-c",
+            "import time; end=time.time()+3\nwhile time.time()<end: pass"
+        ])
+        try:
+            res = asyncio.run(get_top_processes(limit=5, sort_by="cpu"))
+            groups = res.get("groups", [])
+            assert len(groups) > 0
+            # At least one group must have non-zero CPU
+            max_cpu = max(g["cpu_pct"] for g in groups)
+            assert max_cpu > 0.0, f"Expected non-zero CPU among groups, got: {groups}"
+        finally:
+            proc.kill()
+            proc.wait()
+

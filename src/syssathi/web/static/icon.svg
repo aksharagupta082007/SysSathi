@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="20" fill="url(#grad)" />
+  <!-- Stylized Laptop Screen -->
+  <rect x="22" y="24" width="56" height="36" rx="4" fill="#0f172a" stroke="#93c5fd" stroke-width="2.5" />
+  <!-- Lightning / Zap bolt in center -->
+  <path d="M52 28 L40 44 L49 44 L44 56 L60 40 L51 40 Z" fill="#fbbf24" />
+  <!-- Laptop Base -->
+  <path d="M16 64 H84 L78 72 H22 Z" fill="#64748b" />
+</svg>
+

@@ -16,12 +16,21 @@ dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",
     "websockets>=11.0",
+    "regex>=2024.0",
+    "pydantic-settings>=2.0",
+    "platformdirs>=4.0",
+    "pyyaml>=6.0",
 ]
+
+[project.scripts]
+syssathi = "syssathi.host.cli:main"
+syssathi-mcp = "syssathi.mcp_server.server:main"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
+    "ruff>=0.1.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -29,4 +38,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]

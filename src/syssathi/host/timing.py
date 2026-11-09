@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import os
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 def _default_logs_dir() -> Path:
@@ -33,6 +34,15 @@ class Timer:
         else:
             ms = (time.perf_counter() - self._start) * 1000
         self._fields[name] = round(ms, 1)
+
+    @contextmanager
+    def span(self, name: str) -> Iterator[None]:
+        """Context manager measuring execution time of a code block in milliseconds (H15)."""
+        t0 = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.mark(name, t0)
 
     def set(self, name: str, value: Any) -> None:
         """Set an arbitrary field (e.g. route)."""

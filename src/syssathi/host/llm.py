@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -10,6 +11,17 @@ from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+class LLMUnavailable(Exception):
+    """Raised when the configured LLM service is unreachable or failed."""
+    pass
+
+
+class LLMConfigurationError(Exception):
+    """Raised when LLM configuration is invalid or missing."""
+    pass
+
 
 # ---------------------------------------------------------------------------
 # ChatResult — returned by chat()
@@ -58,10 +70,16 @@ _MOCK_TOOL_TABLE: list[tuple[str, str, dict[str, Any]]] = [
     ("battery", "get_battery_report", {}),
     ("startup", "list_startup_apps", {}),
     ("ram", "get_top_processes", {"limit": 5, "sort_by": "ram"}),
+    ("photo edit", "get_tool_recommendations", {"need": "photo editing"}),
+    ("software", "get_tool_recommendations", {"need": "software"}),
+    ("tool", "get_tool_recommendations", {"need": "utilities"}),
+    ("wifi", "search_sources", {"query": "wifi password"}),
+    ("vpn", "explain_term", {"term": "VPN"}),
+    ("error", "explain_term", {"term": "0x80070005"}),
 ]
 
 
-def _mock_chat(
+async def _mock_chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
 ) -> ChatResult:
@@ -111,7 +129,7 @@ def _mock_chat(
 
         # Keyword table
         for keyword, tool_name, args in _MOCK_TOOL_TABLE:
-            if keyword in user_lower:
+            if re.search(rf"\b{re.escape(keyword)}\b", user_lower):
                 logger.info("[MOCK] Simulating tool call: %s", tool_name)
                 return ChatResult(
                     content="",
@@ -171,7 +189,20 @@ def _mock_reply_from_findings(messages: list[dict[str, Any]]) -> str:
             except Exception:
                 pass
 
-    # 4. Look for findings JSON in messages
+    # 4. Check for knowledge recommendations or search results
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str) and ('"recommendations"' in content or '"results"' in content or ('"term"' in content and '"summary"' in content)):
+            try:
+                match = re.search(r"\{.*\}", content, re.DOTALL)
+                if match:
+                    data = json.loads(match.group())
+                    from syssathi.grounding import format_template_reply
+                    return format_template_reply(data)
+            except Exception:
+                pass
+
+    # 5. Look for findings JSON in messages
     findings: dict[str, Any] | None = None
     for msg in messages:
         content = msg.get("content", "")
@@ -241,32 +272,50 @@ def _mock_reply_from_findings(messages: list[dict[str, Any]]) -> str:
 # Evon remote backend (section 4)
 # ---------------------------------------------------------------------------
 
-def _evon_remote_chat(
+_evon_async_client: Any = None
+_evon_cached_model: str | None = None
+
+
+def _get_evon_client() -> Any:
+    global _evon_async_client
+    if _evon_async_client is None:
+        from syssathi.host.config import EVON_BASE_URL, HF_TOKEN
+        import openai
+
+        base_url = EVON_BASE_URL.rstrip("/")
+        if base_url and not base_url.endswith("/v1"):
+            base_url = f"{base_url}/v1"
+
+        _evon_async_client = openai.AsyncOpenAI(
+            base_url=base_url,
+            api_key=HF_TOKEN or "dummy_key",
+            timeout=30.0,
+            max_retries=0,
+        )
+    return _evon_async_client
+
+
+async def _evon_remote_chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
 ) -> ChatResult:
-    """Call the Evon endpoint using the openai package."""
-    from syssathi.host.config import EVON_BASE_URL, EVON_MODEL, HF_TOKEN
-
+    """Call the Evon endpoint using AsyncOpenAI with caching and typed error on failure."""
+    from syssathi.host.config import EVON_MODEL
     import openai
 
-    client = openai.OpenAI(
-        base_url=EVON_BASE_URL,
-        api_key=HF_TOKEN,
-        timeout=30.0,
-        max_retries=1,
-    )
+    client = _get_evon_client()
 
-    # Resolve model id
-    model = EVON_MODEL
+    global _evon_cached_model
+    model = EVON_MODEL or _evon_cached_model
     if not model:
         try:
-            models = client.models.list()
+            models = await client.models.list()
             model = models.data[0].id
-            logger.info("Evon model resolved to: %s", model)
-        except Exception:
-            logger.exception("Failed to list Evon models")
-            raise
+            _evon_cached_model = model
+            logger.info("Evon model resolved and cached: %s", model)
+        except Exception as e:
+            logger.exception("Failed to list Evon models: %s", e)
+            raise LLMUnavailable(f"Failed to resolve Evon model: {e}") from e
 
     kwargs: dict[str, Any] = {
         "model": model,
@@ -278,66 +327,103 @@ def _evon_remote_chat(
     if tools:
         kwargs["tools"] = tools
 
-    import time
-
-    # Retry loop with backoff for scale-to-zero cold start
+    # Single retry loop with backoff for scale-to-zero cold start
     retries = 3
     for attempt in range(retries):
         try:
-            response = client.chat.completions.create(**kwargs)
+            response = await client.chat.completions.create(**kwargs)
             return _parse_openai_response(response)
-        except Exception as e:
-            err_str = str(e)
-            is_503 = "503" in err_str or "Service Unavailable" in err_str
-            if is_503 and attempt < retries - 1:
-                wait_s = (attempt + 1) * 4
-                logger.info("Evon endpoint waking up (503). Retrying in %ds (attempt %d/%d)...", wait_s, attempt + 1, retries)
-                time.sleep(wait_s)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.InternalServerError,
+        ) as e:
+            if attempt < retries - 1:
+                wait_s = min(4 * (attempt + 1), 10)
+                logger.warning(
+                    "Evon connection/server error (%s). Retrying in %ds (attempt %d/%d)...",
+                    e, wait_s, attempt + 1, retries
+                )
+                await asyncio.sleep(wait_s)
                 continue
+            logger.exception("Evon API call failed after retries: %s", e)
+        except openai.APIStatusError as e:
+            if e.status_code == 503 and attempt < retries - 1:
+                wait_s = min(4 * (attempt + 1), 10)
+                logger.info(
+                    "Evon endpoint waking up (503). Retrying in %ds (attempt %d/%d)...",
+                    wait_s, attempt + 1, retries
+                )
+                await asyncio.sleep(wait_s)
+                continue
+            elif e.status_code == 404:
+                # Invalidate model cache on 404
+                _evon_cached_model = None
+            logger.exception("Evon API status error (%s): %s", e.status_code, e)
+            break
+        except Exception as e:
+            logger.exception("Unexpected error calling Evon: %s", e)
+            break
 
-            logger.exception("Evon API call failed (%s)", e)
-            logger.warning("[FALLBACK] Falling back to mock backend for resilience.")
-            return _mock_chat(messages, tools)
+    # If secondary openai_compatible endpoint is configured, try it
+    from syssathi.host.config import OPENAI_COMPAT_BASE_URL
+    if OPENAI_COMPAT_BASE_URL:
+        logger.info("Falling back from Evon to configured openai_compatible endpoint.")
+        return await _openai_compatible_chat(messages, tools)
+
+    # Never fall back silently to mock!
+    raise LLMUnavailable("Evon service is unavailable and no secondary provider is configured.")
 
 
 # ---------------------------------------------------------------------------
 # openai_compatible backend
 # ---------------------------------------------------------------------------
 
-def _openai_compatible_chat(
+_openai_compat_async_client: Any = None
+_openai_compat_cached_model: str | None = None
+
+
+def _get_openai_compat_client() -> Any:
+    global _openai_compat_async_client
+    if _openai_compat_async_client is None:
+        from syssathi.host.config import OPENAI_COMPAT_API_KEY, OPENAI_COMPAT_BASE_URL
+        import openai
+
+        if not OPENAI_COMPAT_BASE_URL:
+            raise LLMConfigurationError(
+                "OPENAI_COMPAT_BASE_URL is required for the openai_compatible backend"
+            )
+
+        _openai_compat_async_client = openai.AsyncOpenAI(
+            base_url=OPENAI_COMPAT_BASE_URL,
+            api_key=OPENAI_COMPAT_API_KEY or "dummy_key",
+            timeout=30.0,
+            max_retries=0,
+        )
+    return _openai_compat_async_client
+
+
+async def _openai_compatible_chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
 ) -> ChatResult:
-    """Call any OpenAI-compatible endpoint."""
-    from syssathi.host.config import (
-        OPENAI_COMPAT_API_KEY,
-        OPENAI_COMPAT_BASE_URL,
-        OPENAI_COMPAT_MODEL,
-    )
-
+    """Call any OpenAI-compatible endpoint asynchronously."""
+    from syssathi.host.config import OPENAI_COMPAT_MODEL
     import openai
 
-    if not OPENAI_COMPAT_BASE_URL:
-        raise RuntimeError(
-            "OPENAI_COMPAT_BASE_URL is required for the openai_compatible backend"
-        )
+    client = _get_openai_compat_client()
 
-    client = openai.OpenAI(
-        base_url=OPENAI_COMPAT_BASE_URL,
-        api_key=OPENAI_COMPAT_API_KEY,
-        timeout=30.0,
-        max_retries=1,
-    )
-
-    model = OPENAI_COMPAT_MODEL
+    global _openai_compat_cached_model
+    model = OPENAI_COMPAT_MODEL or _openai_compat_cached_model
     if not model:
         try:
-            models = client.models.list()
+            models = await client.models.list()
             model = models.data[0].id
+            _openai_compat_cached_model = model
             logger.info("openai_compatible model resolved to: %s", model)
-        except Exception:
-            logger.exception("Failed to list models from openai_compatible endpoint")
-            raise
+        except Exception as e:
+            logger.exception("Failed to list models from openai_compatible endpoint: %s", e)
+            raise LLMUnavailable(f"Failed to list models: {e}") from e
 
     kwargs: dict[str, Any] = {
         "model": model,
@@ -349,10 +435,10 @@ def _openai_compatible_chat(
         kwargs["tools"] = tools
 
     try:
-        response = client.chat.completions.create(**kwargs)
-    except Exception:
-        logger.exception("openai_compatible API call failed")
-        raise
+        response = await client.chat.completions.create(**kwargs)
+    except Exception as e:
+        logger.exception("openai_compatible API call failed: %s", e)
+        raise LLMUnavailable(f"openai_compatible API call failed: {e}") from e
 
     return _parse_openai_response(response)
 
@@ -377,7 +463,7 @@ def _parse_openai_response(response: Any) -> ChatResult:
                 try:
                     args = json.loads(args)
                 except (json.JSONDecodeError, TypeError):
-                    args = {}
+                    args = {"__unparseable_args__": args}
             tool_calls.append(ToolCall(name=tc.function.name, arguments=args))
 
     return ChatResult(content=content, tool_calls=tool_calls, raw=response)
@@ -394,13 +480,13 @@ _BACKENDS = {
 }
 
 
-def chat(
+async def chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
     *,
     backend: str | None = None,
 ) -> ChatResult:
-    """Send messages to the LLM and return a ChatResult.
+    """Send messages to the LLM and return a ChatResult asynchronously.
 
     Args:
         messages: OpenAI-format message list.
@@ -408,8 +494,14 @@ def chat(
         backend: Override the configured backend (for testing).
     """
     if backend is None:
-        from syssathi.host.config import LLM_BACKEND
-        backend = LLM_BACKEND
+        from syssathi.host.config import get_llm_backend
+        backend = get_llm_backend()
+
+    if backend == "unset" or not backend:
+        raise LLMConfigurationError(
+            "SYSSATHI_LLM_BACKEND is not configured in .env. "
+            "Please set SYSSATHI_LLM_BACKEND to 'evon_remote', 'openai_compatible', or 'mock'."
+        )
 
     fn = _BACKENDS.get(backend)
     if fn is None:
@@ -418,5 +510,23 @@ def chat(
             f"Choose from: {', '.join(_BACKENDS)}"
         )
 
-    return fn(messages, tools)
+    return await fn(messages, tools)
 
+
+def chat_sync(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+    *,
+    backend: str | None = None,
+) -> ChatResult:
+    """Synchronous wrapper for chat() to support sync callers."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, chat(messages, tools, backend=backend)).result()
+    return asyncio.run(chat(messages, tools, backend=backend))

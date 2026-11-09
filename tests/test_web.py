@@ -26,17 +26,37 @@ class TestWebApp:
     def test_websocket_talk_offline(self):
         with TestClient(app) as client:
             with client.websocket_connect("/ws/talk") as ws:
-                # Send EOF to signal end of user speech
-                ws.send_text('{"type": "eof"}')
+                # Send text query as per W6
+                ws.send_text('{"type": "text", "text": "Mera laptop slow chal raha hai"}')
 
                 # Receive transcript
                 msg1 = ws.receive_json()
                 assert msg1["type"] == "transcript"
+                assert "slow" in msg1["text"].lower()
 
                 # Receive assistant reply
                 msg2 = ws.receive_json()
                 assert msg2["type"] == "reply"
                 assert len(msg2["text"].split()) <= 40
+
+    def test_websocket_rejects_foreign_origin(self):
+        """W2: WebSocket must reject connections from foreign Origin."""
+        with TestClient(app) as client:
+            with pytest.raises(Exception):
+                with client.websocket_connect(
+                    "/ws/talk",
+                    headers={"Origin": "http://malicious-attacker.com"},
+                ) as ws:
+                    ws.receive_json()
+
+    def test_websocket_empty_audio_returns_unheard_notice(self):
+        """W6: When no text and no audio is sent, reply notifies speech wasn't heard."""
+        with TestClient(app) as client:
+            with client.websocket_connect("/ws/talk") as ws:
+                ws.send_text('{"type": "eof"}')
+                msg1 = ws.receive_json()
+                assert msg1["type"] == "transcript"
+                assert "Awaaz" in msg1["text"]
 
     def test_approve_security_checks(self):
         with TestClient(app) as client:
@@ -74,4 +94,13 @@ class TestWebApp:
                 },
             )
             assert resp.status_code == 400
+
+    def test_api_health_endpoint(self):
+        with TestClient(app) as client:
+            resp = client.get("/api/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "status" in data
+            assert "mcp_server" in data
+            assert data["llm_backend"] == "mock"
 

@@ -103,6 +103,18 @@ class TestProposeCloseRefusals:
         result = propose_close("System")
         assert result["refused"] is True
 
+    def test_refuses_running_group_not_in_diagnosis_or_allowlist(self):
+        from syssathi.mcp_server.actions import record_seen_groups
+        with mock.patch("syssathi.mcp_server.actions._find_group_processes", return_value=[(9999, "backupagent", 1000.0)]):
+            res = propose_close("backupagent")
+            assert res.get("refused") is True
+            assert res.get("code") == "NOT_IN_DIAGNOSIS"
+
+            # Once seen in diagnosis, it is allowed
+            record_seen_groups(["backupagent"])
+            res2 = propose_close("backupagent")
+            assert "action_id" in res2
+
 
 class TestProposeCloseSuccess:
     def test_proposes_ping(self, dummy_ping, token):
@@ -181,6 +193,21 @@ class TestExecuteActionRefusals:
         )
         assert exec_result2["refused"] is True
         assert "already been executed" in exec_result2["reason"].lower()
+
+    def test_proposals_purged_when_expired(self, dummy_ping):
+        from syssathi.mcp_server.actions import _proposals, _purge_proposals, Proposal
+        now = time.time()
+        # Add expired proposal
+        _proposals["exp1"] = Proposal(
+            action_id="exp1", group="g", snapshot=[], created_at=now - 100, expires_at=now - 40
+        )
+        # Add valid proposal
+        _proposals["valid1"] = Proposal(
+            action_id="valid1", group="g", snapshot=[], created_at=now, expires_at=now + 60
+        )
+        _purge_proposals(now)
+        assert "exp1" not in _proposals
+        assert "valid1" in _proposals
 
 
 class TestExecuteActionSkipChangedCreateTime:

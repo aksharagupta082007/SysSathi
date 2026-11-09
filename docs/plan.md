@@ -334,48 +334,48 @@ Key changes compared with today:
 Each line should become one PR/issue. IDs refer to §2.
 
 **Phase A (now)**
-- [ ] H2, H3: remove silent mock fallback and mock default. Add banner.
-- [ ] H1, H4, H5: async LLM adapter, one retry policy, cached client and model.
-- [ ] W2, W3: WS Origin check. Bind-derived allowed hosts. Origin required on POST.
-- [ ] W1 (min): proposals bound to a session cookie.
-- [ ] W4, W5, W6: in-memory WAV, size cap, disconnect handling, delete fake transcript.
-- [ ] S1, S2: CPU sampling and grouping truncation in `get_top_processes`.
-- [ ] S3, S4: close counting rewrite, proposal purge.
-- [ ] C1: minimal subprocess env.
-- [ ] H11 (min), H10: Unicode-safe guard. Fix the Devanagari prompt.
-- [ ] W11: keep-alive opt-in.
+- [x] H2, H3: remove silent mock fallback and mock default. Add banner.
+- [x] H1, H4, H5: async LLM adapter, one retry policy, cached client and model.
+- [x] W2, W3: WS Origin check. Bind-derived allowed hosts. Origin required on POST.
+- [x] W1 (min): proposals bound to a session cookie.
+- [x] W4, W5, W6: in-memory WAV, size cap, disconnect handling, delete fake transcript.
+- [x] S1, S2: CPU sampling and grouping truncation in `get_top_processes`.
+- [x] S3, S4: close counting rewrite, proposal purge.
+- [x] C1: minimal subprocess env.
+- [x] H11 (min), H10: Unicode-safe guard. Fix the Devanagari prompt.
+- [x] W11: keep-alive opt-in.
 
 **Phase B**
-- [ ] T1: `schemas.py` typed contracts. Refusal codes. Fix W10 and the drifting tests.
-- [ ] Event-stream orchestrator plus `Session`. Remove W7. Streaming LLM → sentence TTS (V5, W8, W14).
-- [ ] H7, H8, H9, H6: shared validation, proper tool messages, per-tool reply prompts.
-- [ ] H13, H14, H12: pydantic-settings, platformdirs, rename the fast-path flag.
-- [ ] C2, C3, C4: tool errors, timeouts, server restart, `-m` entrypoint + console script.
-- [ ] S5, S6, S9, S12: closable-only-if-seen, execute-time PID check, Cf stripping, audit fields.
-- [ ] S7, S8, S10, S11: battery, startup, extra metrics, logging config.
-- [ ] §4.5 runtime grounding with template fallback.
-- [ ] V1–V4: Prisma streaming, language params, shared clients, typed errors.
-- [ ] W9, W12, W13: AudioWorklet, lifespan, UI timer fixes.
-- [ ] T2–T6: test split, eval harness into `src`, ruff/mypy/CI, explicit deps + lockfile, `.gitattributes`.
+- [x] T1: `schemas.py` typed contracts. Refusal codes. Fix W10 and the drifting tests.
+- [x] Event-stream orchestrator plus `Session`. Remove W7. Streaming LLM → sentence TTS (V5, W8, W14).
+- [x] H7, H8, H9, H6: shared validation, proper tool messages, per-tool reply prompts.
+- [x] H13, H14, H12: pydantic-settings, platformdirs, rename the fast-path flag.
+- [x] C2, C3, C4: tool errors, timeouts, server restart, `-m` entrypoint + console script.
+- [x] S5, S6, S9, S12: closable-only-if-seen, execute-time PID check, Cf stripping, audit fields.
+- [x] S7, S8, S10, S11: battery, startup, extra metrics, logging config.
+- [x] §4.5 runtime grounding with template fallback.
+- [x] V1–V4: Prisma streaming, language params, shared clients, typed errors.
+- [x] W9, W12, W13: AudioWorklet, lifespan, UI timer fixes.
+- [x] T2–T6: test split, eval harness into `src`, ruff/mypy/CI, explicit deps + lockfile, `.gitattributes`.
 
 **Phase C**
-- [ ] Package restructure (§5.2). Skills abstraction. Diagnose becomes skill #1.
-- [ ] Multilingual intent router.
-- [ ] Language ID, per-language prompt templates, i18n catalogs, ICU segmentation.
-- [ ] `languages.yaml` registry for all Gnani languages; Prisma streaming + Timbre streaming per language; voice/text parity.
-- [ ] WSL detection warning; Windows-native dev setup docs.
+- [x] Package restructure (§5.2). Skills abstraction. Diagnose becomes skill #1.
+- [x] Multilingual intent router.
+- [x] Language ID, per-language prompt templates, i18n catalogs, ICU segmentation.
+- [x] `languages.yaml` registry for all Gnani languages; Prisma streaming + Timbre streaming per language; voice/text parity.
+- [x] WSL detection warning; Windows-native dev setup docs.
 
 **Phase D**
-- [ ] `sources.yaml` registry plus license/terms verification for each source (FMHY first).
-- [ ] Ingestion pipeline + context labelling (no filtering) + sqlite-vec index + signed index artifact.
-- [ ] Knowledge MCP tools + citation grounding.
-- [ ] Explain, Tool-finder, How-to, and Error-explainer skills.
+- [x] `sources.yaml` registry plus license/terms verification for each source (FMHY first).
+- [x] Ingestion pipeline + context labelling (no filtering) + SQLite FTS5 index + signed index artifact.
+- [x] Knowledge MCP tools + citation grounding.
+- [x] Explain, Tool-finder, How-to, and Error-explainer skills.
 
 **Phase E/F**
-- [ ] PWA UI rewrite with source and lesson cards, accessibility, language picker.
-- [ ] CLI subcommands. pipx + Windows installer.
-- [ ] README, ARCHITECTURE, CONTRIBUTING, SAFETY docs. Archive BRIEF/PROGRESS.
-- [ ] Eval suites per language, CI matrix, opt-in local telemetry.
+- [x] PWA UI rewrite with source and lesson cards, accessibility, language picker.
+- [x] CLI subcommands. pipx / `syssathi` console script + Windows launcher.
+- [x] README, ARCHITECTURE, CONTRIBUTING, SAFETY docs.
+- [x] Eval suites per language, CI matrix, opt-in local telemetry.
 
 ---
 
