@@ -82,6 +82,13 @@ class DiagnoseSkill(BaseSkill):
                 summary="Apps that silently start every time you turn on your PC slow down your boot time and idle memory.",
                 actionable_tip="Open Task Manager -> Startup tab and disable apps you only use occasionally.",
             )
+        if "charge_pct" in findings or findings.get("has_battery"):
+            return LessonCard(
+                title="Battery Health (लैपटॉप बैटरी लाइफ)",
+                summary="Laptop batteries naturally degrade over charge cycles. If battery drains quickly, background apps and screen brightness are common culprits.",
+                actionable_tip="Run CMD as Admin and type 'powercfg /batteryreport' to view your battery's full design vs current capacity.",
+                external_link="https://learn.microsoft.com",
+            )
         return None
 
     def format_deterministic_fallback(

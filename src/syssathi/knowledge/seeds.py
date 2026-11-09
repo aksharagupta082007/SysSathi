@@ -403,5 +403,16 @@ DEFAULT_KNOWLEDGE_SEEDS: list[KnowledgeChunk] = [
         tags=["howto", "storage", "cleanup", "disk_space"],
         risk_level=RiskLevel.SAFE,
     ),
+    KnowledgeChunk(
+        chunk_id="howto-battery-drain",
+        source_id="ms_learn",
+        category="howto_system",
+        title="How to Check Battery Health and Fix Battery Drain on Windows",
+        url="https://learn.microsoft.com",
+        description="Diagnosing fast battery drain, checking health capacity, and generating an official Windows battery report.",
+        content="Steps to check battery health and drain: 1. Open Command Prompt (CMD) as Administrator and type 'powercfg /batteryreport' then press Enter. Open the generated HTML file in your browser to inspect Full Charge Capacity vs Design Capacity and cycle count. 2. To reduce fast drain: Open Windows Settings -> System -> Power & Battery, inspect battery usage per app, lower screen brightness, and switch Power Mode to 'Best power efficiency'.",
+        tags=["howto", "battery", "drain", "health", "powercfg"],
+        risk_level=RiskLevel.SAFE,
+    ),
 ]
 
