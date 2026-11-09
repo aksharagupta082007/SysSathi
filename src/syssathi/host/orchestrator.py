@@ -188,7 +188,7 @@ class Orchestrator:
                         break
 
         # 3. Evon reply call
-        system_prompt = get_reply_prompt(session.script or REPLY_STYLE)
+        system_prompt = get_reply_prompt(session.script or REPLY_STYLE, language=session.language)
         user_prompt_data = {"findings": findings}
         if proposal_info:
             user_prompt_data["proposal"] = proposal_info
@@ -365,7 +365,9 @@ class Orchestrator:
             tool_output_str = str(tool_output)[:2000]
 
         # 3. Reply Call 2
-        reply_sys_prompt = get_reply_prompt(session.script or REPLY_STYLE, tool_name=tool_name)
+        reply_sys_prompt = get_reply_prompt(
+            session.script or REPLY_STYLE, tool_name=tool_name, language=session.language
+        )
         call_id = f"call_{secrets.token_hex(4)}"
         call2_messages = [
             {"role": "system", "content": reply_sys_prompt},
