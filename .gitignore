@@ -9,4 +9,7 @@ dist/
 build/
 .pytest_cache/
 *.log
+demo_assets/
+*.mp4
+firefox_*.png
 
