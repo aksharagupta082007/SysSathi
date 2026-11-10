@@ -79,7 +79,10 @@ class TestCLISubcommands:
         assert "RAM Usage" in captured
 
     @pytest.mark.asyncio
-    async def test_cmd_ask_photo_edit(self, capsys: pytest.CaptureFixture[str]) -> None:
+    async def test_cmd_ask_photo_edit(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SYSSATHI_LLM_BACKEND", "mock")
         args = argparse.Namespace(
             command="ask",
             question="photo edit",
